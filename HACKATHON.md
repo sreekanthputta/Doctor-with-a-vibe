@@ -16,7 +16,41 @@ Do not pitch “replace everyone in a hospital.” Pitch:
 
 > **A front office in software; humans handle clinical care and exceptions.**
 
-The north star is a Cursor-like cockpit for the entire clinic. The winning one-day wedge is narrower: **one call becomes one ready visit without manual re-entry**.
+The north star is a Cursor-like cockpit for the entire clinic. The winning one-day wedge is narrower: **one call becomes one ready visit without manual re-entry**. See `UI.md` for the exact patient and physician surfaces.
+
+## Platform architecture
+
+```text
+Phone / website / SMS
+          |
+          v
+Deepgram voice transport
+          |
+          v
+OnePractice workflow brain and user experience
+       |              |              |
+       v              v              v
+   Medplum          Moss           Stedi
+clinical/workflow  derived search  payer network
+source of truth    accelerator     transaction authority
+```
+
+OnePractice owns policy, sequencing, approval, idempotency, and exception routing. No vendor independently decides a clinical or financial action. Medplum remains authoritative for patient/clinical/workflow state. Stedi is authoritative for the current payer transaction and is synchronized into Medplum. Moss is rebuildable and must never become an access-control or clinical-fact source. Deepgram supplies audio transport and transcription, not reasoning.
+
+The workflow brain is deterministic around the model:
+
+```text
+channel adapter
+  -> identity/session gate
+  -> schema-validated intent
+  -> versioned practice-policy engine
+  -> deterministic workflow state machine
+  -> scoped provider adapter
+  -> centralized FHIR mutation service
+  -> provenance and security audit
+```
+
+The model may propose a typed intent or draft copy. It never owns workflow state transitions, patient identity, permission decisions, retries, or arbitrary provider/FHIR tools.
 
 ## Why this concept
 
@@ -67,6 +101,8 @@ The patient completes most of the questionnaire but omits the medication list. O
 - shows timestamped Stedi test fields if available, with missing values as `unknown/not checked`.
 
 It never translates eligibility into “covered,” “in network,” “no authorization required,” or a price guarantee.
+
+The patient reopens the fictional visit through **Synthetic Demo Access**. A typed demo username selects a predefined fictional persona; it is not authentication and never exposes real data. Production replaces this with a verified one-time link/code, passkey, or equivalent identity proof.
 
 ### 1:45–2:25 — Physician cockpit
 
@@ -154,6 +190,7 @@ A referral begins as a proposal. After physician approval, create a `ServiceRequ
 - **Deepgram Flux:** future front-desk conversational turn-taking.
 - **Deepgram Nova streaming/batch:** future encounter transcription with diarization and finalized segments.
 - **Stedi:** optional test eligibility adapter; show only returned fields.
+- **Moss:** optional derived semantic index for approved clinic knowledge and synthetic demo documents; every patient-specific hit must be permission-filtered, re-fetched from Medplum, and version-checked.
 - **Messaging/PSTN/model:** fixture-first, disabled without breaking the demo.
 
 Provider secrets remain server-side. Never send real PHI during the hackathon. Deepgram entity-level PHI redaction must not be assumed for Flux.
@@ -193,6 +230,7 @@ Do not build in v1:
 - general workflow builder or multi-agent animation;
 - multiple clinics, specialties, visit types, or payer scenarios;
 - raw audio retention or real patient data.
+- username-only access to any real or user-entered patient information.
 
 ## Sponsor questions
 

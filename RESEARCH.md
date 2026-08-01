@@ -64,6 +64,24 @@ OnePractice Ready Visit wins the internal review because it provides:
 
 The internal reviewers rejected the full clinic vision as a one-day build. The security/demo reviewer gave a conditional go only after narrowing live dependencies, locking patient context, removing autonomous medication/referral behavior, and enforcing typed approval-gated mutations.
 
+## Vendor architecture review
+
+| Layer | Role | Authoritative for | Not authoritative for | Hackathon use |
+| --- | --- | --- | --- | --- |
+| OnePractice | policy, workflow state machine, approvals, idempotency, exceptions, UI | workflow decisions made under published rules | clinical facts or payer responses | core product |
+| Medplum | FHIR clinical and operational record | patients, appointments, forms, chart, orders, tasks, committed claim representation | live payer processing state | only required live dependency |
+| Stedi | payer/clearinghouse transactions | response returned by a payer/clearinghouse at a timestamp | coverage guarantee, coding, medical necessity, fee schedules | labeled eligibility test fixture/API |
+| Deepgram | speech-to-text and text-to-speech transport | finalized transcript output from the selected model | identity, intent, triage, clinical reasoning | prerecorded/browser voice enhancement |
+| Moss | low-latency semantic search index | no source-of-truth data | permissions, active medications/allergies, availability, balances, eligibility or claim status | non-PHI clinic knowledge only; otherwise defer |
+
+Stedi's current published catalog supports eligibility and benefits, insurance discovery, coordination of benefits, professional/institutional/dental claims, claim attachments, 277CA acknowledgments, 276/277 claim-status checks, and 835 remittance responses. However, test API keys currently support approved real-time eligibility fixtures; production payer transactions require a production account, appropriate BAA/account controls, enrollment where applicable, and operational reconciliation. Claims are roadmap, not part of the judged demo.
+
+For eligibility, `Coverage` represents the patient policy. A request/response may be represented using FHIR `CoverageEligibilityRequest` and `CoverageEligibilityResponse`, with the original Stedi payload retained as a linked source artifact when necessary. Do not turn the result into a boolean `verified` field. Stedi owns the external response; Medplum stores a timestamped projection and source reference with freshness/reconciliation state.
+
+Moss's YC profile describes a Fall 2025, five-person company building sub-10ms semantic retrieval across browser, mobile, and server environments. That makes it promising but nonessential. Keep it behind a `SemanticSearchProvider` interface. Before indexing PHI, require tenancy isolation, BAA/retention/deletion review, authorization before and after retrieval, Medplum re-fetch, version rejection, access-revocation tests, and deletion propagation. The index must always be rebuildable from approved sources.
+
+Deepgram is not a telephone or SMS network. A production phone number still needs a PSTN/telephony adapter, call state, consent, transfer, delivery, retry, and failure handling. Browser voice or prerecorded audio is the honest hackathon channel.
+
 ## Clinical-chat boundary
 
 The physician should be able to ask questions over a selected patient, but the initial product must behave as **record-aware retrieval**, not an autonomous medical authority.
