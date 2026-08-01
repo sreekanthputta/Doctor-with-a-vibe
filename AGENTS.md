@@ -4,11 +4,11 @@
 
 ## Mission
 
-Build **OnePractice**, a FHIR-native operations layer that lets an independent physician run with a radically lean team. The hackathon proof is **one call to one ready visit**: a synthetic patient schedules, completes intake, receives follow-up for missing administrative information, and appears in a single physician exception inbox backed by Medplum.
+Build **OnePractice**, a FHIR-native operations layer for **OneCare Clinic**, a fictional virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. The hackathon proof is **one call to one ready visit**: synthetic patient Maria Lopez schedules, completes intake, receives follow-up for missing administrative information, and appears in Dr. Maya Chen's single physician exception inbox backed by Medplum.
 
 The vision is a front office in software; humans still provide physical care, clinical judgment, legal accountability, and exception handling. Never market or implement autonomous medical practice.
 
-Read `README.md`, `HACKATHON.md`, `ARCHITECTURE.md`, `UI.md`, `DEEPGRAM.md`, `BUILD_PLAN.md`, `DECISIONS.md`, and `RESEARCH.md` before planning or editing. `HACKATHON.md` defines visible scope; `RESEARCH.md` cannot expand it.
+Read `README.md`, `HACKATHON.md`, `CLINIC.md`, `ARCHITECTURE.md`, `UI.md`, `DEEPGRAM.md`, `BUILD_PLAN.md`, `DECISIONS.md`, and `RESEARCH.md` before planning or editing. `HACKATHON.md` defines visible scope; `CLINIC.md` defines the fictional customer/roadmap but cannot expand the release; `RESEARCH.md` cannot expand it.
 
 ## Product invariant
 
@@ -134,7 +134,7 @@ At architecture selection, before a demo-critical merge, and at demo freeze, run
 
 Run independent reviews in parallel up to the configured limit, then the remainder in a second wave. Reviewers report only. A finding is actionable only when it includes evidence, a reproducible trigger or missing state, impact, and the smallest defensible fix/test. Do not freeze with an unresolved CRITICAL or HIGH finding; explicitly record accepted MEDIUM risks.
 
-Review precedence is `AGENTS.md` → `HACKATHON.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → `RESEARCH.md`.
+Review precedence is `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → `RESEARCH.md`.
 
 ## Clinical AI rules
 

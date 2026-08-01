@@ -12,11 +12,13 @@ Deadline: 5:00 PM Pacific
 
 ## Decision
 
-Build **OnePractice**, a FHIR-native operations layer for a new independent outpatient practice. It completes routine front-office workflows and routes only exceptions to the physician.
+Build **OnePractice**, the FHIR-native operations layer for **OneCare Clinic**, a fictional virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. It completes routine front-office workflows and routes only exceptions to Dr. Maya Chen.
 
 Do not pitch “replace everyone in a hospital.” Pitch:
 
 > **A front office in software; humans handle clinical care and exceptions.**
+
+Long-term framing: **One physician runs an AI-native, virtual-first adult primary-care microclinic without dedicated administrative staff.** Do not claim that one person runs a hospital or that external laboratories, imaging facilities, pharmacies, specialists, urgent care, and emergency departments have no human teams. See `CLINIC.md`.
 
 The north star is a Cursor-like cockpit for the entire clinic. The winning one-day wedge is narrower: **one call becomes one ready visit without staff re-entering the patient's information**. See `UI.md` for the exact patient and physician surfaces.
 
@@ -63,7 +65,7 @@ patient intent
   -> physician approval only where judgment is required
 ```
 
-It demonstrates why healthcare benefits from an agent without pretending the model can practice medicine. The long-term buyer is an owner-physician or practice operator in a new one-to-five-provider outpatient practice.
+It demonstrates why healthcare benefits from an agent without pretending the model can practice medicine. The initial buyer is an owner-family-physician operating a new adult primary-care microclinic; later expansion may support other outpatient practices.
 
 ## Exact three-minute demo
 
@@ -75,7 +77,7 @@ Show an empty “Tomorrow” queue.
 
 ### 0:20–1:10 — Patient front door
 
-A scripted synthetic patient says or types:
+A scripted synthetic patient, Maria Lopez, says or types:
 
 > “I’m a new patient. I want an annual wellness visit next Tuesday morning and I have Aetna.”
 
@@ -260,6 +262,7 @@ Ask only questions that change the build:
 - [Medplum referral management](https://www.medplum.com/docs/careplans/referrals)
 - [Medplum AI guidance](https://www.medplum.com/docs/ai)
 - [FDA Clinical Decision Support Software guidance](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/clinical-decision-support-software)
+- [AAFP family medicine](https://www.aafp.org/about/family-medicine)
 - [Deepgram Voice Agent Browser SDK](https://developers.deepgram.com/docs/browser-agent-overview)
 - [Deepgram Inject User](https://developers.deepgram.com/docs/voice-agent-inject-user-message)
 - [Deepgram function-call request](https://developers.deepgram.com/docs/voice-agent-function-call-request)

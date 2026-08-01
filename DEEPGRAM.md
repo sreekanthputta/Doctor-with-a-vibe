@@ -2,7 +2,7 @@
 
 Research checked August 1, 2026.
 
-> **Document priority:** `AGENTS.md` → `HACKATHON.md` → `ARCHITECTURE.md` → this document. If examples here conflict with those files, the higher-priority document wins.
+> **Document priority:** `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → this document. If examples here conflict with those files, the higher-priority document wins.
 
 ## Decision
 

@@ -4,6 +4,8 @@
 
 OnePractice is a FHIR-native operations layer for independent outpatient practices. It completes routine administrative work under published practice rules, stores durable clinical/workflow state in Medplum, and routes uncertainty to an accountable human with source, owner, and deadline.
 
+The fictional customer is **OneCare Clinic**, a virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. It is explicitly not a hospital; physical and specialty services remain with external human-operated partners.
+
 Current status: architecture and hackathon scope approved; application scaffold not yet created.
 
 ## Hackathon proof
@@ -18,12 +20,13 @@ Normative precedence:
 
 1. [`AGENTS.md`](./AGENTS.md) — safety, authorization, engineering rules, quality gates
 2. [`HACKATHON.md`](./HACKATHON.md) — selected release, exact demo, acceptance criteria
-3. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — canonical components, contracts, data ownership, state transitions
-4. [`UI.md`](./UI.md) — patient and physician interaction contract
-5. [`DEEPGRAM.md`](./DEEPGRAM.md) — optional live voice/chat adapter and roadmap clinical tools
-6. [`BUILD_PLAN.md`](./BUILD_PLAN.md) — dependency graph, parallel lanes, task board, integration cadence
-7. [`DECISIONS.md`](./DECISIONS.md) — accepted architecture decisions and superseded alternatives
-8. [`RESEARCH.md`](./RESEARCH.md) — non-normative evidence, vendor capabilities, alternatives, sources
+3. [`CLINIC.md`](./CLINIC.md) — fictional adult primary-care microclinic, physician, services, exclusions, roadmap patient
+4. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — canonical components, contracts, data ownership, state transitions
+5. [`UI.md`](./UI.md) — patient and physician interaction contract
+6. [`DEEPGRAM.md`](./DEEPGRAM.md) — optional live voice/chat adapter and roadmap clinical tools
+7. [`BUILD_PLAN.md`](./BUILD_PLAN.md) — dependency graph, parallel lanes, task board, integration cadence
+8. [`DECISIONS.md`](./DECISIONS.md) — accepted architecture decisions and superseded alternatives
+9. [`RESEARCH.md`](./RESEARCH.md) — non-normative evidence, vendor capabilities, alternatives, sources
 
 If documents disagree, the earlier item in this list wins. Research describes possibilities; it does not expand the release.
 

@@ -2,15 +2,17 @@
 
 Research checked August 1, 2026.
 
-> **Document role:** supporting research, not the normative specification. Resolve conflicts in this order: `AGENTS.md` → `HACKATHON.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → this file.
+> **Document role:** supporting research, not the normative specification. Resolve conflicts in this order: `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → this file.
 
 ## Executive decision
 
-The strongest product direction is an **AI operations layer for independent outpatient practices**, with Medplum as the source of truth and a Cursor-like physician cockpit.
+The strongest product direction is an **AI operations layer for a virtual-first adult primary-care microclinic**, with Medplum as the source of truth and a Cursor-like physician cockpit. OnePractice is the platform; OneCare Clinic is the fictional practice operated by one family physician without dedicated administrative staff.
 
 The credible promise is not “replace every hospital employee.” It is:
 
 > **A front office in software; humans handle clinical care and exceptions.**
+
+The believable ambition is a microclinic, not a hospital. AAFP describes family medicine as first-contact, continuous, comprehensive care and highlights prevention, chronic-illness management, specialist coordination, and follow-up. The fictional practice is deliberately adult-only for the first product, even though full family-medicine training spans all ages. This product restriction reduces pediatric consent/dosing and obstetric complexity; it does not redefine the specialty.
 
 The best hackathon wedge is **one call to one ready visit**. It demonstrates scheduling, intake, missing-information follow-up, optional eligibility, a physician exception inbox, and a visible Medplum graph in one coherent loop. Encounter transcription, clinical chat, referrals, and revenue-cycle automation are logical expansions after the core loop works.
 
@@ -223,6 +225,9 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 - [Medplum referrals](https://www.medplum.com/docs/careplans/referrals)
 - [Medplum clinical protocols](https://www.medplum.com/docs/careplans/protocols)
 - [Medplum AI guidance](https://www.medplum.com/docs/ai)
+- [AAFP family medicine](https://www.aafp.org/about/family-medicine)
+- [AAFP definition of family medicine](https://www.aafp.org/about/policies/family-medicine-definition)
+- [AAFP primary care](https://www.aafp.org/about/policies/primary-care)
 - [FDA Clinical Decision Support Software guidance, January 2026](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/clinical-decision-support-software)
 - [NLM RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/index.html)
 - [RxNorm APIs](https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html)

@@ -6,7 +6,7 @@ sandbox_mode = "read-only"
 developer_instructions = """
 Review as a clinical informatics safety reviewer. Do not edit files and do not provide medical approval.
 
-Resolve documentation conflicts in this order: AGENTS.md, HACKATHON.md, ARCHITECTURE.md, UI.md/DEEPGRAM.md, BUILD_PLAN.md, RESEARCH.md. Flag any clinical data gap (medication, symptom, allergy, diagnosis, result, or treatment question) mislabeled as an administrative readiness field.
+Resolve documentation conflicts in this order: AGENTS.md, HACKATHON.md, CLINIC.md, ARCHITECTURE.md, UI.md/DEEPGRAM.md, BUILD_PLAN.md, RESEARCH.md. Flag any clinical data gap (medication, symptom, allergy, diagnosis, result, or treatment question) mislabeled as an administrative readiness field.
 
 For medication evidence, require exact Medplum patient facts, normalized drug identity, explicit validated rule/interaction sources, authoritative label/version revalidation, performed/unavailable checks, and clinician-only decision. Moss similarity or retrieved label text alone must never create a safety alert, declare a drug safe, select a dose, or authorize prescribing; patient facts/PHI must not enter the Moss index or query.
 

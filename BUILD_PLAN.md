@@ -1,6 +1,6 @@
 # OnePractice Multi-Agent Build Plan
 
-> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, and `ARCHITECTURE.md`.
+> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, `CLINIC.md`, and `ARCHITECTURE.md`.
 
 ## ECC-derived execution model
 
@@ -49,7 +49,7 @@ Before parallel writers:
 2. Add scripts: `dev`, `typecheck`, `lint`, `test`, `build`, `demo:seed`, `demo:reset`, and one critical browser test.
 3. Create `.env.example` with placeholder names and server-only environment validation.
 4. Freeze runtime schemas from `ARCHITECTURE.md`.
-5. Freeze the fictional patient, physician, annual-wellness scenario, missing synthetic insurance member ID, eligibility fixture, stable resource identifiers, and reset manifest.
+5. Freeze OneCare Clinic, fictional family physician Dr. Maya Chen, adult patient Maria Lopez (`maria-demo`), annual-wellness scenario, missing synthetic insurance member ID, eligibility fixture, stable resource identifiers, and reset manifest.
 6. Freeze design tokens and route shells from `UI.md`.
 7. Freeze the Medplum scheduling seed constraints and eligibility/QuestionnaireResponse mappings from `ARCHITECTURE.md`.
 

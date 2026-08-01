@@ -1,6 +1,6 @@
 # OnePractice UI and Interaction Specification
 
-> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, and `ARCHITECTURE.md`.
+> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, `CLINIC.md`, and `ARCHITECTURE.md`.
 
 ## Design thesis
 
@@ -46,6 +46,8 @@ Never place the patient and physician experiences behind the same generic chat i
 
 ### Hero
 
+Display `OneCare Clinic` as the fictional practice and `Powered by OnePractice` as the platform attribution.
+
 > One call. One ready visit.
 >
 > Schedule, complete intake, and arrive prepared.
@@ -77,7 +79,7 @@ When Deepgram is unavailable, show `Voice unavailable — continue by typing`. T
 Username-only access is allowed solely as a hackathon shortcut:
 
 - Label it `Synthetic Demo Access`, not login or passwordless authentication.
-- Accept only allowlisted fictional usernames such as `alex-demo`.
+- Accept only allowlisted fictional usernames such as `maria-demo`.
 - Show a persistent `DEMO · SYNTHETIC DATA` banner.
 - Do not create an account from arbitrary input.
 - Do not reveal user-entered or real patient information.
@@ -93,7 +95,7 @@ Use a warm ivory canvas, deep-ink typography, soft cards, generous spacing, and 
 
 ```text
 Tuesday, August 4 · 10:30 AM
-Dr. Maya Chen · Routine new-patient visit
+Dr. Maya Chen · Adult annual-wellness visit
 
 Visit readiness: Ready
 
@@ -129,11 +131,11 @@ Never use a green success state for `Covered`, `In network`, `Insurance verified
 
 ## Physician cockpit
 
-Use a desktop-first graphite workspace with three panes:
+Use a desktop-first graphite workspace for Dr. Maya Chen with three panes:
 
 ```text
 ┌ Tomorrow / Exceptions ┐ ┌ Ready-visit workspace ┐ ┌ Evidence inspector ┐
-│ 9:30  Alex Rivera  ✓  │ │ Appointment            │ │ Source timestamps   │
+│ 9:30  Maria Lopez  ✓  │ │ Appointment            │ │ Source timestamps   │
 │ Exceptions (0)        │ │ Intake                 │ │ Provenance          │
 │ +1 after safety replay│ │ Coverage               │ │ Policy decision     │
 └───────────────────────┘ └────────────────────────┘ └─────────────────────┘

@@ -1,6 +1,6 @@
 # OnePractice Canonical Architecture
 
-> Normative priority: subordinate to `AGENTS.md` and `HACKATHON.md`; authoritative for technical component boundaries.
+> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, and the fictional-practice scope in `CLINIC.md`; authoritative for technical component boundaries.
 
 ## System boundary
 
@@ -77,7 +77,7 @@ Medplum is the application source of truth and the only patient-data retrieval l
 
 | State | FHIR resources |
 | --- | --- |
-| Fictional practice/provider/payer | practice and payer `Organization`, `Practitioner`, `PractitionerRole` |
+| OneCare Clinic / Dr. Maya Chen / payer | practice and payer `Organization`, `Practitioner`, `PractitionerRole` |
 | Bookable visit | `HealthcareService`, `Schedule`, `Slot`, `Appointment` |
 | Fictional patient | `Patient`; `RelatedPerson` only when a proxy is part of a later flow |
 | Policy supplied by patient | `Coverage` |

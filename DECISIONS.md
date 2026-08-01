@@ -62,3 +62,8 @@ Decision: future orders, referrals, prescriptions, notes, and claims follow Ask 
 
 Status: accepted
 Decision: use exact, authorization-scoped Medplum queries for all patient and workflow retrieval. Moss may later be benchmarked as an index of public, versioned medication-label passages only. It never stores patient facts, performs safety checks, or replaces RxNorm normalization, validated interaction/rules data, authoritative-source revalidation, or clinician judgment.
+
+## D-012 — Platform, microclinic, specialty, and persona
+
+Status: accepted
+Decision: OnePractice is the platform; OneCare Clinic is the fictional virtual-first adult primary-care microclinic; Dr. Maya Chen is its fictional family physician; Maria Lopez is the single synthetic patient. The product is not a hospital. The hackathon shows Maria's administrative annual-wellness readiness flow; her cardiometabolic/medication scenario is governed roadmap only.
