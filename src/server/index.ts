@@ -1,9 +1,14 @@
 import express from 'express';
+import { config } from 'dotenv';
 import path from 'node:path';
 import process from 'node:process';
+import { parseServerEnv } from './env.js';
+
+if (process.env.NODE_ENV !== 'production') config({ path: ['.env.local', '.env'], quiet: true });
 
 const app = express();
-const port = Number.parseInt(process.env.PORT ?? '3001', 10);
+const environment = parseServerEnv(process.env);
+const port = environment.port;
 const distPath = path.resolve(process.cwd(), 'dist');
 
 app.disable('x-powered-by');
