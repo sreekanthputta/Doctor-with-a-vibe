@@ -20,6 +20,7 @@
     "@mantine/core": "^7.17.8",
     "@mantine/hooks": "^7.17.8",
     "@medplum/core": "^4.5.2",
+    "@medplum/fhirtypes": "^4.5.2",
     "@medplum/react": "^4.5.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
