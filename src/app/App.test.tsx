@@ -15,7 +15,7 @@ describe('route shells', () => {
 
   it('always labels the experience as synthetic', () => {
     render(<App />);
-    expect(screen.getByText(/Synthetic demo only/i)).toBeInTheDocument();
+    expect(screen.getByText(/synthetic data/i)).toBeInTheDocument();
     expect(screen.getByText(/Powered by Medplum/i)).toBeInTheDocument();
   });
 });

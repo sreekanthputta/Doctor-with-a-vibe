@@ -1,41 +1,64 @@
-import { resolveShell, type Shell } from './routes';
-
-const shellCopy: Record<Shell, { eyebrow: string; title: string; description: string }> = {
-  public: {
-    eyebrow: 'VibeDoc front desk',
-    title: 'One request. One ready visit.',
-    description: 'Schedule and complete a synthetic annual-wellness intake by typing. Voice is optional.',
-  },
-  demo: {
-    eyebrow: 'Synthetic Demo Access',
-    title: 'Choose a fictional workspace',
-    description: 'This is a persona selector, not authentication. No real patient information is available.',
-  },
-  patient: {
-    eyebrow: 'Synthetic patient workspace',
-    title: 'Prepare for your visit',
-    description: 'Review the appointment, intake, and coverage readiness for the fictional demo patient.',
-  },
-  physician: {
-    eyebrow: 'Dr. Maya Chen',
-    title: 'Physician cockpit',
-    description: 'The next visit is suggested. Open it explicitly to inspect sources, provenance, and exceptions.',
-  },
-};
+import { useState } from 'react';
+import { resolveShell } from './routes';
+import { PatientWorkspaceShell } from '../ui/shells/patient-workspace/PatientWorkspaceShell';
+import { PhysicianCockpitShell } from '../ui/shells/physician-cockpit/PhysicianCockpitShell';
+import { PublicAccessShell } from '../ui/shells/public-access/PublicAccessShell';
+import { SyntheticDemoAccessShell } from '../ui/shells/demo-access/SyntheticDemoAccessShell';
+import {
+  completedBookingTrace,
+  needsAttentionVisit,
+  physicianVisits,
+  readyVisit,
+  uncertainIdentityException,
+} from '../ui/fixtures/presentation';
 
 export function App(): React.JSX.Element {
   const shell = resolveShell(window.location.pathname);
-  const copy = shellCopy[shell];
+  const [patientVisit, setPatientVisit] = useState(needsAttentionVisit);
+  const [lastPublicMessage, setLastPublicMessage] = useState('');
+
+  if (shell === 'demo') {
+    return (
+      <SyntheticDemoAccessShell
+        state="ready"
+        onSelectPersona={(persona) => {
+          window.location.assign(persona === 'maria-demo' ? '/patient/visit' : '/physician/inbox');
+        }}
+      />
+    );
+  }
+
+  if (shell === 'patient') {
+    return (
+      <PatientWorkspaceShell
+        state="ready"
+        visit={patientVisit}
+        onSubmitMemberId={(memberId) => {
+          if (memberId === 'AETNA-DEMO-2048') setPatientVisit(readyVisit);
+        }}
+      />
+    );
+  }
+
+  if (shell === 'physician') {
+    return (
+      <PhysicianCockpitShell
+        state="ready"
+        visits={physicianVisits}
+        exceptions={[uncertainIdentityException]}
+        onOpenVisit={() => undefined}
+        onAcknowledgeException={() => undefined}
+      />
+    );
+  }
 
   return (
-    <main className="shell" data-shell={shell}>
-      <div className="demo-banner">Synthetic demo only · No real patient data</div>
-      <section className="shell-card" aria-labelledby="page-title">
-        <p className="eyebrow">{copy.eyebrow}</p>
-        <h1 id="page-title">{copy.title}</h1>
-        <p>{copy.description}</p>
-        <small>VibeDoc · Powered by Medplum</small>
-      </section>
-    </main>
+    <PublicAccessShell
+      state="ready"
+      providerMode="fixture"
+      traceContextKey={`public:${lastPublicMessage}`}
+      traces={lastPublicMessage ? [completedBookingTrace] : []}
+      onSubmit={setLastPublicMessage}
+    />
   );
 }
