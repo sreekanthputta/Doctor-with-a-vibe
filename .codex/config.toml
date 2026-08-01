@@ -1,0 +1,6 @@
+# Project-local Codex configuration.
+# Reviewer agents are deliberately read-only and inherit the current model.
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
