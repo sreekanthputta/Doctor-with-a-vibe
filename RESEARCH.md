@@ -2,6 +2,8 @@
 
 Research checked August 1, 2026.
 
+> **Document role:** supporting research, not the normative specification. Resolve conflicts in this order: `AGENTS.md` → `HACKATHON.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → this file.
+
 ## Executive decision
 
 The strongest product direction is an **AI operations layer for independent outpatient practices**, with Medplum as the source of truth and a Cursor-like physician cockpit.
@@ -71,14 +73,14 @@ The internal reviewers rejected the full clinic vision as a one-day build. The s
 | OnePractice | policy, workflow state machine, approvals, idempotency, exceptions, UI | workflow decisions made under published rules | clinical facts or payer responses | core product |
 | Medplum | FHIR clinical and operational record | patients, appointments, forms, chart, orders, tasks, committed claim representation | live payer processing state | only required live dependency |
 | Stedi | payer/clearinghouse transactions | response returned by a payer/clearinghouse at a timestamp | coverage guarantee, coding, medical necessity, fee schedules | labeled eligibility test fixture/API |
-| Deepgram | Voice Agent transport/LLM/function selection plus medical transcription | agent events and finalized transcript output from the selected model | identity, workflow authority, authorization, triage, or clinical judgment | shared voice/chat ready-visit interface; prerecorded fallback |
-| Moss | low-latency semantic search index | no source-of-truth data | permissions, active medications/allergies, availability, balances, eligibility or claim status | non-PHI clinic knowledge only; otherwise defer |
+| Deepgram | conversational speech, Think/LLM output, function proposals, and transcription | provider events and finalized transcript output from the selected model | identity, workflow authority, authorization, triage, or clinical judgment | optional shared live voice/chat interface; deterministic typed fallback bypasses it |
+| Moss | low-latency semantic search index | no source-of-truth data | permissions, active medications/allergies, availability, balances, eligibility or claim status | evaluated and rejected for this build; use exact scoped Medplum queries |
 
 Stedi's current published catalog supports eligibility and benefits, insurance discovery, coordination of benefits, professional/institutional/dental claims, claim attachments, 277CA acknowledgments, 276/277 claim-status checks, and 835 remittance responses. However, test API keys currently support approved real-time eligibility fixtures; production payer transactions require a production account, appropriate BAA/account controls, enrollment where applicable, and operational reconciliation. Claims are roadmap, not part of the judged demo.
 
-For eligibility, `Coverage` represents the patient policy. A request/response may be represented using FHIR `CoverageEligibilityRequest` and `CoverageEligibilityResponse`, with the original Stedi payload retained as a linked source artifact when necessary. Do not turn the result into a boolean `verified` field. Stedi owns the external response; Medplum stores a timestamped projection and source reference with freshness/reconciliation state.
+For eligibility, `Coverage` represents the patient policy. The canonical demo graph uses FHIR `CoverageEligibilityRequest` and `CoverageEligibilityResponse`, with an identifier/reference to the original Stedi transaction or labeled fixture artifact. Do not turn the result into a boolean `verified` field. Stedi owns the external response; Medplum stores a timestamped normalized projection, source identifier, and freshness/reconciliation state.
 
-Moss's YC profile describes a Fall 2025, five-person company building sub-10ms semantic retrieval across browser, mobile, and server environments. That makes it promising but nonessential. Keep it behind a `SemanticSearchProvider` interface. Before indexing PHI, require tenancy isolation, BAA/retention/deletion review, authorization before and after retrieval, Medplum re-fetch, version rejection, access-revocation tests, and deletion propagation. The index must always be rebuildable from approved sources.
+Moss was evaluated and rejected for this build. The first slice needs exact patient-, tenant-, resource-, and status-scoped Medplum queries, not semantic retrieval. Adding Moss now would duplicate data, introduce another permissions/deletion surface, and weaken demo reliability without a measured retrieval bottleneck. Reconsider a rebuildable semantic index only after real query/latency evidence demonstrates a need.
 
 Deepgram is not a telephone or SMS network. A production phone number still needs a PSTN/telephony adapter, call state, consent, transfer, delivery, retry, and failure handling. Browser voice or prerecorded audio is the honest hackathon channel.
 
@@ -106,7 +108,7 @@ Use two separate Deepgram paths:
 | Front-desk voice/chat agent | Deepgram Voice Agent; audio or `InjectUserMessage` through one session | its function requests remain untrusted and require the OnePractice policy dispatcher |
 | Doctor-patient encounter | Nova streaming/batch with diarization, utterances, keyterms | interim text is display-only; finalized transcript remains a source, not a chart fact |
 
-Audio must go through an authenticated server-side gateway. Never expose the provider key in the browser. Use only synthetic audio for the hackathon, make recording state visible, do not persist raw audio by default, and keep logs free of transcript payloads.
+The browser may connect to Deepgram with a narrowly scoped short-lived token issued by an authenticated server-side endpoint; the permanent provider key must never enter browser code. Use only synthetic audio for the hackathon, make recording state visible, do not persist raw audio by default, and keep logs free of transcript payloads. The deterministic typed path bypasses Deepgram entirely but emits the same validated intent schema.
 
 The durable flow is:
 
@@ -179,10 +181,11 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 
 ### Deepgram
 
-1. Which model do you recommend for phone turn-taking versus a two-speaker clinical encounter?
-2. What retention/model-improvement settings should be set for synthetic hackathon audio and later PHI use?
-3. Which diarization, finalization, reconnect, and idempotency behavior should the demo explicitly handle?
-4. Does any selected model provide entity-level PHI redaction, and what is not supported?
+1. Which Voice Agent Think/listen/speak models do you recommend for browser front-desk turn-taking, and which separate model for a future two-speaker clinical encounter?
+2. What least-privilege scopes and maximum TTL should our browser token endpoint issue, and can tokens be bound to a session or origin?
+3. Does `InjectUserMessage` always invoke Speak/TTS, is that billed when playback is muted, and is there a supported per-turn or per-session text-only mode?
+4. What conversation and function-call context must be supplied after reconnect, and how should duplicate or in-flight function calls be handled?
+5. What retention/model-improvement settings should be used for synthetic hackathon audio and later PHI, and what PHI redaction is not supported?
 
 ### Judges/organizers
 
@@ -195,6 +198,7 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 
 - [YC x Medplum Hackathon](https://events.ycombinator.com/medplum-hackathon-26)
 - [Medplum scheduling](https://www.medplum.com/docs/scheduling)
+- [Medplum appointment booking](https://www.medplum.com/docs/scheduling/appointment-book)
 - [Medplum intake](https://www.medplum.com/docs/intake)
 - [Medplum charting](https://www.medplum.com/docs/charting)
 - [Medplum referrals](https://www.medplum.com/docs/careplans/referrals)
@@ -203,7 +207,11 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 - [FDA Clinical Decision Support Software guidance, January 2026](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/clinical-decision-support-software)
 - [NLM RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/index.html)
 - [DailyMed developer resources](https://dailymed.nlm.nih.gov/dailymed/app-support.cfm)
-- [Deepgram Flux quickstart](https://developers.deepgram.com/docs/flux/quickstart)
+- [Deepgram Browser Agent overview](https://developers.deepgram.com/docs/browser-agent-overview)
+- [Deepgram Inject User](https://developers.deepgram.com/docs/voice-agent-inject-user-message)
+- [Deepgram FunctionCallRequest](https://developers.deepgram.com/docs/voice-agent-function-call-request)
+- [Deepgram FunctionCallResponse](https://developers.deepgram.com/docs/voice-agent-function-call-response)
+- [Deepgram function-call context](https://developers.deepgram.com/docs/voice-agent-function-call-context)
 - [Deepgram diarization](https://developers.deepgram.com/docs/diarization)
 - [Deepgram redaction](https://developers.deepgram.com/docs/redaction)
 - [NCSBN delegation guidance](https://www.ncsbn.org/public-files/NGND-PosPaper_06.pdf)
@@ -214,6 +222,14 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 - [BLS medical records specialists](https://www.bls.gov/ooh/healthcare/medical-records-and-health-information-technicians.htm)
 - [BLS secretaries and administrative assistants](https://www.bls.gov/ooh/office-and-administrative-support/secretaries-and-administrative-assistants.htm)
 - [Stedi eligibility workflows](https://www.stedi.com/docs/healthcare/eligibility-workflows-overview)
+- [Stedi healthcare APIs](https://www.stedi.com/docs/healthcare)
+- [Stedi claim submission overview](https://www.stedi.com/docs/healthcare/intro-to-claim-submission)
+- [Stedi healthcare API reference](https://www.stedi.com/docs/healthcare/api-reference)
+- [Stedi account settings and test environment](https://www.stedi.com/docs/healthcare/account-settings)
+- [FHIR R4 CoverageEligibilityRequest](https://hl7.org/fhir/R4/coverageeligibilityrequest.html)
+- [FHIR R4 CoverageEligibilityResponse](https://hl7.org/fhir/R4/coverageeligibilityresponse.html)
+- [FHIR R4 QuestionnaireResponse](https://hl7.org/fhir/R4/questionnaireresponse.html)
+- [FHIR R4 Communication](https://hl7.org/fhir/R4/communication.html)
 
 ## Reviewer configuration provenance
 

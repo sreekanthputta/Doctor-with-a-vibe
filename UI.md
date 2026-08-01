@@ -1,5 +1,7 @@
 # OnePractice UI and Interaction Specification
 
+> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, and `ARCHITECTURE.md`.
+
 ## Design thesis
 
 OnePractice has two deliberately different surfaces:
@@ -10,7 +12,7 @@ OnePractice has two deliberately different surfaces:
 The shared interaction is the **Ready Visit Rail**:
 
 ```text
-Request -> Appointment -> Intake -> Coverage response -> Ready
+Request -> Appointment -> Intake -> Coverage response -> Needs attention -> Ready
 ```
 
 The product should feel fast and intelligent because state changes are immediate, sources are visible, and exceptions are precise—not because animated agents make invisible decisions.
@@ -64,7 +66,11 @@ Use a single voice orb as a restrained accent. Opening it reveals a large conver
 - `Stop microphone` and `Switch to typing` controls;
 - final review before booking.
 
+Before opening a provider connection or capturing audio, present the applicable disclosure and require affirmative consent to microphone capture and third-party voice processing. Browser microphone permission is a separate device control, not consent. State the demo retention behavior and provide immediate stop/revoke; declining continues by typing without issuing a Deepgram token.
+
 The assistant describes its scope as scheduling, forms, coverage-response collection, and administrative questions. Never use “Ask me anything.” If symptoms are entered, it stops the routine flow and hands off without assessing severity, suggesting a visit type, diagnosing, reassuring, or recommending care.
+
+When Deepgram is unavailable, show `Voice unavailable — continue by typing`. Typed input continues through the deterministic adapter without waiting for a reconnect. A compact source label distinguishes `Live voice`, `Prerecorded replay`, and `Deterministic fixture`.
 
 ## Synthetic demo access
 
@@ -76,6 +82,7 @@ Username-only access is allowed solely as a hackathon shortcut:
 - Do not create an account from arbitrary input.
 - Do not reveal user-entered or real patient information.
 - Keep patient and clinician demo personas on distinct routes.
+- Issue new server-side role-bound sessions for public booking, patient demo, and physician demo; navigation cannot promote an existing session.
 - Reset sessions and data deterministically.
 
 Production authentication requires verified control of a channel or authenticator, such as a one-time link/code or passkey, plus secure sessions, expiry, recovery, audit, authorization, and step-up verification for sensitive actions.
@@ -88,21 +95,24 @@ Use a warm ivory canvas, deep-ink typography, soft cards, generous spacing, and 
 Tuesday, August 4 · 10:30 AM
 Dr. Maya Chen · Routine new-patient visit
 
-Visit readiness: 3 of 4 complete
+Visit readiness: Ready
 
 ✓ Appointment booked
 ✓ Contact details received
 ✓ Coverage response received
-! Medication list still needed
+✓ Insurance member ID received
 
-[Complete intake]
+[View visit]
 ```
+
+During the demo this card first displays `Needs attention` and `Insurance member ID required`. After the patient supplies the synthetic ID, eligibility runs, the original Task completes, and the card changes to Ready. Never display Ready with an open required-field Task.
 
 Below the card:
 
 - appointment details;
 - submitted intake and consent;
 - coverage response;
+- eligibility request/response evidence in the technical inspector;
 - administrative messages;
 - talk/type with the administrative assistant.
 
@@ -123,10 +133,9 @@ Use a desktop-first graphite workspace with three panes:
 
 ```text
 ┌ Tomorrow / Exceptions ┐ ┌ Ready-visit workspace ┐ ┌ Evidence inspector ┐
-│ 9:00  Jordan Lee   ✓  │ │ Identity               │ │ FHIR resources      │
-│ 9:30  Alex Rivera  1  │ │ Appointment            │ │ Source timestamps   │
-│ 10:00 Sam Patel    ✓  │ │ Intake                 │ │ Provenance          │
-│                       │ │ Coverage                │ │ Policy decision     │
+│ 9:30  Alex Rivera  ✓  │ │ Appointment            │ │ Source timestamps   │
+│ Exceptions (0)        │ │ Intake                 │ │ Provenance          │
+│ +1 after safety replay│ │ Coverage               │ │ Policy decision     │
 └───────────────────────┘ └────────────────────────┘ └─────────────────────┘
 ```
 
@@ -143,23 +152,23 @@ Cursor-inspired behavior:
 - compact/balanced/detailed evidence density;
 - explicit accept/edit/reject actions rather than invisible auto-apply.
 
-A persistent context bar displays patient name, second identifier, appointment, encounter status, and recording state. The next patient may be suggested, but `Open visit` and two-identifier confirmation are required before establishing a write or recording context.
+A persistent MVP context bar displays patient name, second identifier, appointment, readiness, and provider-source mode. Encounter and recording controls remain hidden until that roadmap feature is built. The next patient may be suggested, but `Open visit` and two-identifier confirmation are required before establishing any future write or recording context.
 
 ## Exception inbox
 
 Make exceptions a first-class queue. Each row shows:
 
-- administrative category;
-- patient;
+- workflow category;
+- patient when identity is established, otherwise a non-PHI session/caller label;
 - owner;
 - due time;
 - acknowledgment state;
 - reason automation stopped;
 - one clear next action.
 
-Initial categories are identity, scheduling, intake, coverage, and provider failure. Do not display clinical urgency classifications because OnePractice is not performing triage.
+Initial categories are identity, scheduling, intake, coverage, clinical-language handoff, and provider failure. Do not display clinical urgency classifications because OnePractice is not performing triage. A symptom-bearing message displays `Clinical content received — not assessed`, creates a `requested`/unacknowledged Task owned by the configured clinical-review queue, shows neutral handoff copy, and promises no response time beyond published service hours. Only an authorized human action may transition it to `accepted`.
 
-The detail view shows what happened, the rule that stopped the workflow, exact sources, safe actions, and the resulting audit/provenance state.
+The detail view shows what happened, the rule that stopped the workflow, exact sources, safe actions, FHIR Provenance, and a separately labeled sanitized application security event. Never imply that the application event is Medplum access audit.
 
 ## Encounter review roadmap
 
@@ -237,8 +246,8 @@ Both surfaces share the logo, Ready Visit Rail, status vocabulary, and source/pr
 
 1. **0:00–0:15:** Landing page and Ready Visit Rail establish the promise.
 2. **0:15–0:55:** Synthetic patient talks or types; the assistant discloses automation, offers two policy-approved slots, and books one.
-3. **0:55–1:20:** Synthetic Demo Access opens the patient dashboard. Eligibility is timestamped; one intake field is omitted.
-4. **1:20–1:45:** The rail stops at intake and shows the follow-up preview plus one owned `Task`.
-5. **1:45–2:20:** Switch to the dark physician cockpit; show the ready-visit card, exception, and Medplum evidence pane.
-6. **2:20–2:40:** An uncertain-identity replay reveals no information and creates an acknowledged exception.
-7. **2:40–3:00:** Expand the evidence pane to show `Appointment`, `QuestionnaireResponse`, `Coverage`, `Task`, `Communication`, and `Provenance`.
+3. **0:55–1:15:** Synthetic Demo Access opens the patient dashboard. The insurance member ID is missing, eligibility is `Not checked`, and the rail shows Needs attention.
+4. **1:15–1:40:** The in-app follow-up requests the synthetic member ID; the patient supplies it, eligibility runs, the same Task completes, and the rail advances to Ready.
+5. **1:40–2:20:** Switch to the dark physician cockpit; show the Ready visit and Medplum evidence pane.
+6. **2:20–2:40:** An uncertain-identity replay reveals no information and creates one new `requested`/unacknowledged exception for the separate session.
+7. **2:40–3:00:** Return to the cockpit, show the new exception count and explicit `Acknowledge` action, then expand the Ready visit evidence pane to show `Appointment`, `QuestionnaireResponse`, `Coverage`, `CoverageEligibilityRequest`, `CoverageEligibilityResponse`, completed `Task`, `CommunicationRequest`, delivered `Communication`, and `Provenance`.

@@ -2,15 +2,18 @@
 
 Research checked August 1, 2026.
 
+> **Document priority:** `AGENTS.md` → `HACKATHON.md` → `ARCHITECTURE.md` → this document. If examples here conflict with those files, the higher-priority document wins.
+
 ## Decision
 
-Build voice and typed chat on the same Deepgram Voice Agent session.
+When Deepgram is enabled, build live voice and live typed chat on the same role-specific Voice Agent session. Always retain a deterministic typed path that bypasses Deepgram and emits the same validated `AdministrativeIntent` schema.
 
 - Voice input sends microphone audio over the WebSocket.
 - Typed input sends `InjectUserMessage`.
 - Both inputs use the same Deepgram Think model, prompt, context, function definitions, and tool dispatcher.
 - Both render `ConversationText` in the conversation timeline.
 - Voice mode plays returned audio. Chat mode mutes or discards playback.
+- If token issuance, the WebSocket, model, or TTS fails, typed input continues through `ScriptedConversationAdapter`; it does not wait for Deepgram to reconnect.
 
 Deepgram documents `InjectUserMessage` specifically for chat/text interfaces and says the agent responds as though the user spoke the message. Current documentation does not describe a per-turn pure-text mode that bypasses Speak/TTS. Confirm billing and any supported TTS-disable mechanism with the sponsor; do not assume muted audio avoids TTS cost.
 
@@ -19,7 +22,7 @@ Deepgram documents `InjectUserMessage` specifically for chat/text interfaces and
 ```text
 microphone audio ─┐
                   ├─> Deepgram Voice Agent WebSocket
-typed text ───────┘        STT -> Think/LLM -> Speak
+live typed text ──┘        STT -> Think/LLM -> Speak
                                  |
                                  v
                       FunctionCallRequest[]
@@ -37,6 +40,11 @@ typed text ───────┘        STT -> Think/LLM -> Speak
                                  |
                                  v
                    ConversationText + optional audio
+
+typed fallback -> ScriptedConversationAdapter -> AdministrativeIntent
+                                      |
+                                      v
+                         same policy/tool dispatcher
 ```
 
 Deepgram chooses whether to request a declared function; OnePractice executes it. Deepgram never receives arbitrary Medplum or Stedi credentials and never becomes the workflow authority.
@@ -48,23 +56,28 @@ The wire message is:
 ```json
 {
   "type": "InjectUserMessage",
-  "content": "Show me tomorrow's appointments"
+  "content": "Show me Tuesday morning appointment times"
 }
 ```
 
-Keep one `AgentSessionState` for voice and chat:
+Keep one patient-front-desk session state for live voice and live typed chat. Physician context is a separate authenticated roadmap state and can never be reached by upgrading a public session:
 
 ```ts
 type InteractionMode = 'voice' | 'chat';
 
-interface AgentSessionState {
+interface FrontDeskAgentSessionState {
   mode: InteractionMode;
   connected: boolean;
   sessionId: string;
-  selectedPatientId?: string;
-  lockedEncounterId?: string;
   messages: ConversationMessage[];
   pendingFunctionCalls: FunctionCall[];
+  publicSessionId: string;
+}
+
+interface PhysicianSessionState {
+  authenticatedUserId: string;
+  selectedPatientId?: string;
+  lockedEncounterId?: string;
 }
 ```
 
@@ -74,7 +87,7 @@ Switching mode changes microphone and playback behavior, not the agent, tools, o
 
 A `FunctionCallRequest` can contain multiple functions. Each includes an ID, name, JSON-encoded arguments, and `client_side`. Some Think models can include `thought_signature`; preserve it exactly as required by current Deepgram SDK/types.
 
-For every client-side function:
+Deepgram's `client_side` flag means that the application must return the result; it does not mean the operation is trusted or safe to execute directly in a browser. For every application-handled function:
 
 1. Confirm `client_side === true`.
 2. Look up the name in the role-specific allowlist.
@@ -99,7 +112,7 @@ interface ToolDefinition<TArgs, TResult> {
   execute: (args: TArgs, context: AuthorizedContext) => Promise<TResult>;
   requiresConfirmation: boolean;
   idempotent: boolean;
-  allowedRoles: Array<'patient-demo' | 'physician' | 'billing'>;
+  allowedRoles: Array<'public-booking' | 'patient-demo' | 'physician-demo' | 'billing-roadmap'>;
 }
 ```
 
@@ -126,6 +139,10 @@ background jobs/reminders                  # roadmap
 
 This gateway stores no duplicate clinical database. It protects permanent/service credentials, performs policy enforcement, handles public sessions and callbacks, and supports work that must continue after the browser closes.
 
+The token endpoint must issue least-privilege short-lived credentials, bind requests to an allowed origin and application session, apply rate and abuse limits, and never return the permanent Deepgram key. The server session must contain a timestamped acknowledgment of the displayed voice-processing disclosure (including disclosure version/provider); absent, declined, expired, or revoked acknowledgment returns `403`, while deterministic typing remains available. Confirm the supported token scope and TTL with Deepgram before claiming production readiness.
+
+Revocation is active, not merely prospective: stop the microphone track, clear queued audio/playback, close the Voice Agent WebSocket, invalidate the server session/token where supported, discard unexecuted function proposals, and reject any late frame or function response for that revoked session. The UI then remains in deterministic typed mode.
+
 ### Safe browser-side functions
 
 For an authenticated, properly scoped Medplum user:
@@ -137,6 +154,8 @@ For an authenticated, properly scoped Medplum user:
 - populate an uncommitted local draft;
 - stage a typed proposal;
 - request confirmation.
+
+The public patient session is more restricted: browser code may update presentation state and submit validated requests to the gateway, but it may not directly create patients, book appointments, search the organization, run eligibility, or send messages.
 
 ### Server-side functions
 
@@ -170,7 +189,9 @@ Initial tools:
 
 No clinical chart search, symptom classification, medication advice, ordering, referrals, claims, or organization-wide patient search.
 
-### Physician cockpit
+The post-booking `patient-demo` session is separate from `public-booking`. It may read only its fixed fictional persona's appointment, forms, coverage response, Tasks, and messages and may submit the outstanding synthetic member ID through the gateway. It cannot search availability for arbitrary identities, enumerate patients, or invoke physician tools.
+
+### Physician cockpit — roadmap, not the judged workflow
 
 Read/draft roadmap tools:
 
@@ -188,7 +209,7 @@ Read/draft roadmap tools:
 
 Clinical commit/transmit tools are separate commands and require a locked patient context, explicit reviewed action card, current source versions, an authenticated authorized user, and the correct signature/integration workflow. They are not included in the hackathon demo.
 
-### Billing roadmap
+### Billing — roadmap, not the judged workflow
 
 - `get_eligibility_response`
 - `create_claim_draft`
@@ -201,7 +222,7 @@ Submission and resubmission require a production Stedi account, idempotency, sup
 
 Do not create separate agents merely to make an architecture diagram look agentic. A role deserves its own agent only when its data permissions, tools, prompt, or accountable user differs.
 
-## Clinical action model
+## Clinical action model — roadmap appendix
 
 The physician experience is:
 
@@ -219,14 +240,15 @@ Never map a spoken sentence directly to an active clinical resource or external 
 | Prescription | `MedicationRequest`/eRx workflow | DoseSpot or another certified network | approved enrolled prescriber; EPCS controls where applicable |
 | Results | `DiagnosticReport` + `Observation` | lab/imaging inbound integration | clinician interprets and acknowledges |
 | Note/chart updates | workflow-specific clinical resources + `Provenance` | Medplum transaction | clinician edits/signs each proposal |
-| Follow-up | `Appointment` + `Task`/`Communication` | scheduling/messaging adapter | published rule or clinician approval |
+| Administrative scheduling | `Appointment` + `Task`/`Communication` | scheduling/messaging adapter | patient-requested routine change or execution of an already signed instruction |
+| Clinical follow-up need/interval/type | signed instruction/order plus `Task` | scheduling/messaging adapter | clinician decides and signs before logistics execute |
 | Claim draft | `Claim` plus supporting sources | Stedi 837P roadmap | clinician/coder approves signed-record-supported coding |
 
 Creating a FHIR resource does not prove that an external lab, imaging center, pharmacy, payer, or specialist received it. Transmission, acknowledgment, fulfillment, results, and closure are separate states.
 
 Medplum's current Health Gorilla integration is advanced and requires provider organization eligibility, lab accounts/relationships, and implementation setup. Its DoseSpot integration is limited to approved prescribers engaged in patient care and includes identity proofing and EPCS requirements. These cannot be simulated by a generic function call and described as production-ready.
 
-## Action-card UI
+## Action-card UI — roadmap appendix
 
 Every proposed clinical action appears in the physician's right-side diff/review pane:
 
@@ -252,15 +274,15 @@ Voice can open, fill, or navigate an action card. Signing requires a deliberate 
 
 ## Demo scope
 
-Use Deepgram for both voice and chat in the ready-visit flow:
+Deepgram is an optional live enhancement for voice and chat in the ready-visit flow:
 
 1. Browser obtains a short-lived token.
-2. Voice or `InjectUserMessage` starts the same administrative session.
+2. Voice or `InjectUserMessage` starts the same administrative session when connected.
 3. Deepgram requests only allowlisted ready-visit functions.
 4. OnePractice validates and executes them through deterministic adapters.
 5. Medplum remains the only required live backend dependency.
 6. Stedi uses a labeled eligibility fixture/test request.
-7. Clinical order/referral cards appear only as a final roadmap mock, if time permits; they do not write or transmit.
+7. If Deepgram is unavailable, typed input immediately uses the deterministic adapter and the same policy dispatcher.
 
 ## Required tests
 
@@ -274,14 +296,21 @@ Use Deepgram for both voice and chat in the ready-visit flow:
 - A WebSocket reconnect restores only allowed relevant history, never authority.
 - Muted chat does not accidentally play queued TTS audio.
 - Missing backend/token/provider falls back to the deterministic typed demo.
+- Typed fallback remains usable after a WebSocket failure without reconnecting first.
+- Public-booking, patient-demo, and physician-demo sessions have distinct route/session/tool matrices; neither public nor patient-demo can be promoted or invoke physician tools.
+- Replaying any one role's cookie/token against either other route family returns `401/403`.
+- Direct token requests before voice-processing acknowledgment, after decline, or after revoke return `403`.
+- No token, WebSocket, or audio capture starts before affirmative voice-processing consent; declining continues by typing.
+- Revocation tears down the active microphone/WebSocket, drops queued media and unexecuted tool proposals, and late frames cannot mutate state.
 
 ## Official references
 
 - [Deepgram Inject User](https://developers.deepgram.com/docs/voice-agent-inject-user-message)
+- [Deepgram Voice Agent message flow](https://developers.deepgram.com/docs/voice-agent-message-flow)
 - [Deepgram FunctionCallRequest](https://developers.deepgram.com/docs/voice-agent-function-call-request)
 - [Deepgram FunctionCallResponse](https://developers.deepgram.com/docs/voice-agent-function-call-response)
-- [Deepgram function call context](https://developers.deepgram.com/docs/voice-agent-function-call-context)
-- [Deepgram Browser Agent SDK](https://developers.deepgram.com/docs/browser-agent-overview)
+- [Deepgram function-call context](https://developers.deepgram.com/docs/voice-agent-function-call-context)
+- [Deepgram Browser Agent overview](https://developers.deepgram.com/docs/browser-agent-overview)
 - [Medplum diagnostic orders](https://www.medplum.com/docs/labs-imaging)
 - [Medplum Health Gorilla integration](https://www.medplum.com/docs/integration/health-gorilla)
 - [Medplum referral management](https://www.medplum.com/docs/careplans/referrals)

@@ -1,3 +1,4 @@
+#:schema https://developers.openai.com/codex/config-schema.json
 # Project-local Codex configuration.
 # Reviewer agents are deliberately read-only and inherit the current model.
 
