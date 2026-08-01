@@ -8,12 +8,12 @@
   },
   "scripts": {
     "dev": "concurrently -k -n web,server \"vite\" \"tsx watch src/server/index.ts\"",
-    "start": "node dist-server/src/server/index.js",
+    "start": "node dist-server/index.js",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "test": "vitest run",
     "test:unit": "vitest run src",
-    "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "build": "tsc -b && vite build && vite build --ssr src/server/index.ts --outDir dist-server",
     "gate:0a": "bash scripts/gate-0a.sh"
   },
   "dependencies": {
