@@ -3,6 +3,8 @@ import { ScriptedConversationAdapter } from '../adapters/scripted-conversation.j
 import { StediEligibilityFixture } from '../adapters/stedi-eligibility-fixture.js';
 import { createWorkflowState, reduceWorkflow, type DemoWorkflowState } from '../domain/workflow-reducer.js';
 import { DEMO_V1 } from '../test/fixtures/demo-v1.js';
+import type { StopCategory } from '../domain/exception-policy.js';
+import { decideDemoIdentity } from '../domain/identity-gate.js';
 
 export type DemoResourceEvidence = {
   resourceType: string;
@@ -14,7 +16,7 @@ export type DemoResourceEvidence = {
 
 export type DemoException = {
   id: string;
-  category: 'clinical-language' | 'identity';
+  category: StopCategory;
   status: 'requested';
   ownerReference: string;
 };
@@ -24,6 +26,7 @@ export type DemoWorkflowSnapshot = {
   visit?: ReadyVisitVM;
   exceptions: DemoException[];
   resourceEvidence: DemoResourceEvidence[];
+  stopCopy?: string;
 };
 
 export class DemoWorkflowStore {
@@ -47,16 +50,16 @@ export class DemoWorkflowStore {
 
   async submitRequest(message: string): Promise<DemoWorkflowSnapshot> {
     if (this.#snapshot.phase === 'stopped') return this.snapshot();
-    try {
-      await this.conversation.interpret(message);
-    } catch {
-      this.#domain = reduceWorkflow(this.#domain, { type: 'stopped', category: 'clinical-language' });
+    const decision = await this.conversation.evaluate(message, { workflowRunId: this.#domain.workflowRunId });
+    if (decision.action === 'stop') {
+      this.#domain = reduceWorkflow(this.#domain, { type: 'stopped', category: decision.category });
       this.#snapshot = {
         phase: 'stopped',
         resourceEvidence: [],
+        stopCopy: decision.safeCopy,
         exceptions: [{
-          id: 'demo-v1:exception:clinical-language',
-          category: 'clinical-language',
+          id: decision.exceptionCommand.commandId,
+          category: decision.category,
           status: 'requested',
           ownerReference: DEMO_V1.practitionerRoleReference,
         }],
@@ -65,6 +68,14 @@ export class DemoWorkflowStore {
     }
 
     if (this.#snapshot.phase !== 'empty') return this.snapshot();
+    const identity = decideDemoIdentity({
+      kind: 'identity-submission',
+      givenName: DEMO_V1.patient.givenName,
+      familyName: DEMO_V1.patient.familyName,
+      birthDate: DEMO_V1.patient.birthDate,
+      postalCode: DEMO_V1.patient.postalCode,
+    }, []);
+    if (identity.outcome === 'uncertain') return this.#stopForIdentity();
     this.#domain = reduceWorkflow(this.#domain, { type: 'identity-verified' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'appointment-booked' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'intake-saved', complete: false });
@@ -75,6 +86,19 @@ export class DemoWorkflowStore {
       resourceEvidence: this.#initialEvidence(),
     };
     return this.snapshot();
+  }
+
+  submitUncertainIdentityReplay(): DemoWorkflowSnapshot {
+    if (this.#snapshot.phase !== 'empty') return this.snapshot();
+    const identity = decideDemoIdentity({
+      kind: 'identity-submission',
+      givenName: DEMO_V1.patient.givenName,
+      familyName: DEMO_V1.patient.familyName,
+      birthDate: '1974-02-15',
+      postalCode: DEMO_V1.patient.postalCode,
+    }, []);
+    if (identity.outcome !== 'uncertain') throw new Error('Uncertain identity fixture did not stop');
+    return this.#stopForIdentity();
   }
 
   async submitMemberId(memberId: string): Promise<DemoWorkflowSnapshot> {
@@ -113,6 +137,22 @@ export class DemoWorkflowStore {
       sourceUpdatedAt: DEMO_V1.clock,
       provenanceState: status === 'ready' ? 'confirmed' : 'reconciling',
     };
+  }
+
+  #stopForIdentity(): DemoWorkflowSnapshot {
+    this.#domain = reduceWorkflow(this.#domain, { type: 'stopped', category: 'identity' });
+    this.#snapshot = {
+      phase: 'stopped',
+      stopCopy: 'VibeDoc could not verify this synthetic identity. No patient information was disclosed.',
+      resourceEvidence: [],
+      exceptions: [{
+        id: 'demo-v1:exception:identity:uncertain',
+        category: 'identity',
+        status: 'requested',
+        ownerReference: DEMO_V1.practitionerRoleReference,
+      }],
+    };
+    return this.snapshot();
   }
 
   #initialEvidence(): DemoResourceEvidence[] {

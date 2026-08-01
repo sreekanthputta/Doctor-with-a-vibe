@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const SessionContextSchema = z.object({
   sessionId: z.string().min(1),
-  role: z.enum(['public', 'patient-demo', 'physician-demo']),
+  role: z.enum(['public', 'demo-access', 'patient-demo', 'physician-demo']),
   persona: z.enum(['anonymous', 'maria-demo', 'maya-demo']),
   csrfToken: z.string().min(16),
   expiresAt: z.iso.datetime({ offset: true }),

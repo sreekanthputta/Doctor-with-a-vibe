@@ -40,6 +40,14 @@ describe('Gate 0A contract freeze', () => {
       expiresAt: '2026-08-01T16:00:00-05:00',
       voiceCapability: 'revoked',
     }).success).toBe(true);
+    expect(SessionContextSchema.safeParse({
+      sessionId: 'session-demo',
+      role: 'demo-access',
+      persona: 'anonymous',
+      csrfToken: 'csrf-token-at-least-16',
+      expiresAt: '2026-08-01T16:00:00-05:00',
+      voiceCapability: 'absent',
+    }).success).toBe(true);
   });
 
   it('allows only sanitized trace projections', () => {

@@ -81,8 +81,8 @@ export type PhysicianVisitVM = ReadyVisitVM &
   Readonly<{
     sourceLabel: string;
     evidenceResources: readonly WorkflowEvidenceResourceVM[];
-    resolvedTaskHistory: ResolvedTaskHistoryVM;
-    eligibilityLinkage: EligibilityEvidenceLinkageVM;
+    resolvedTaskHistory?: ResolvedTaskHistoryVM;
+    eligibilityLinkage?: EligibilityEvidenceLinkageVM;
     securityEvent: SanitizedSecurityEventVM;
   }>;
 

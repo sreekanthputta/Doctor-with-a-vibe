@@ -19,6 +19,9 @@ type PublicAccessShellProps = Readonly<{
   traceContextKey: string;
   traces: readonly TraceVM[];
   onSubmit: (message: string) => void;
+  stopCopy?: string;
+  stopHeading?: string;
+  onRunUncertainIdentity?: () => void;
 }>;
 
 export function PublicAccessShell({
@@ -27,6 +30,9 @@ export function PublicAccessShell({
   traceContextKey,
   traces,
   onSubmit,
+  stopCopy,
+  stopHeading,
+  onRunUncertainIdentity,
 }: PublicAccessShellProps): React.JSX.Element {
   const [message, setMessage] = useState('');
 
@@ -57,8 +63,8 @@ export function PublicAccessShell({
         <p className="vd-source-label">Source: <span>{providerLabels[providerMode]}</span></p>
         {state === 'stopped' ? (
           <section className="vd-safety-stop" role="alert">
-            <h3>Clinical content received — not assessed</h3>
-            <p>{SAFETY_COPY}</p>
+            <h3>{stopHeading ?? 'Clinical content received — not assessed'}</h3>
+            <p>{stopCopy ?? SAFETY_COPY}</p>
           </section>
         ) : (
           <form
@@ -82,6 +88,11 @@ export function PublicAccessShell({
               <button type="button" className="patient-target" aria-label="Talk to the front desk">
                 Talk to the front desk
               </button>
+              {onRunUncertainIdentity ? (
+                <button type="button" onClick={onRunUncertainIdentity}>
+                  Replay uncertain identity
+                </button>
+              ) : null}
             </div>
           </form>
         )}

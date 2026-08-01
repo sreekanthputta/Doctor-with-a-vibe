@@ -30,10 +30,28 @@ describe('DemoWorkflowStore vertical slice', () => {
     expect(store.snapshot().exceptions).toHaveLength(1);
   });
 
+  it('preserves an unmatched administrative category and neutral stop copy', async () => {
+    const store = new DemoWorkflowStore();
+    await store.submitRequest('I need an annual welness vist');
+    const stopped = store.snapshot();
+    expect(stopped.exceptions[0]?.category).toBe('administrative-unmatched');
+    expect(stopped.stopCopy).toMatch(/could not complete that administrative request/i);
+    expect(stopped.stopCopy).not.toMatch(/call 911/i);
+  });
+
   it('cannot become Ready with a wrong or missing member ID', async () => {
     const store = new DemoWorkflowStore();
     await store.submitRequest('I need an annual wellness visit');
     await expect(store.submitMemberId('wrong')).rejects.toThrow(/member ID/i);
     expect(store.snapshot().phase).toBe('needs-attention');
+  });
+
+  it('stops an uncertain identity without Patient or Appointment evidence', () => {
+    const store = new DemoWorkflowStore();
+    const stopped = store.submitUncertainIdentityReplay();
+    expect(stopped.phase).toBe('stopped');
+    expect(stopped.exceptions).toEqual([expect.objectContaining({ category: 'identity', status: 'requested' })]);
+    expect(stopped.resourceEvidence).toEqual([]);
+    expect(JSON.stringify(stopped)).not.toContain('Maria');
   });
 });

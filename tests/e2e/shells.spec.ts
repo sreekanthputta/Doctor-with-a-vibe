@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
-import type { DemoWorkflowSnapshot } from '../../src/server/demo-workflow-store';
 
 test.describe('VibeDoc four-shell demo', () => {
   test.beforeEach(async ({ request }) => {
-    await request.post('/api/demo/reset');
+    await request.post('/api/demo/reset', { headers: { 'X-Demo-Reset-Token': 'vibedoc-e2e-reset' } });
   });
 
   test('public access is synthetic and offers typed administrative access', async ({ page }) => {
@@ -34,14 +33,18 @@ test.describe('VibeDoc four-shell demo', () => {
     await publicPage.getByRole('button', { name: /Book appointment completed/i }).click();
     await expect(publicPage.getByText(/Appointment recorded/i)).toBeVisible();
 
-    await patient.goto('/patient/visit');
+    await patient.goto('/demo');
+    await patient.getByRole('button', { name: /Continue as Maria Lopez/i }).click();
+    await patient.waitForURL('**/patient/visit');
     await expect(patient.getByText(/visit readiness/i)).toBeVisible();
     await expect(patient.getByRole('status')).toHaveText('Needs attention');
     await patient.getByLabel(/insurance member id/i).fill('AETNA-DEMO-2048');
     await patient.getByRole('button', { name: /submit member id/i }).click();
     await expect(patient.getByRole('status')).toHaveText('Ready');
 
-    await physician.goto('/physician/inbox');
+    await physician.goto('/demo');
+    await physician.getByRole('button', { name: /Continue as Dr\. Maya Chen/i }).click();
+    await physician.waitForURL('**/physician/inbox');
     await expect(physician.getByText(/suggested next visit/i)).toBeVisible();
     await expect(physician.getByText(/Updated:/i)).toBeVisible();
     await expect(physician.getByRole('status')).toHaveText('Ready');
@@ -51,15 +54,26 @@ test.describe('VibeDoc four-shell demo', () => {
     await physicianContext.close();
   });
 
-  test('mixed clinical input stops with safety copy and no booking', async ({ page, request }) => {
+  test('mixed clinical input stops with safety copy and no booking', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('textbox', { name: /message/i }).fill('I have chest pain and need an annual wellness visit');
     await page.getByRole('button', { name: /send request/i }).click();
     await expect(page.getByText(/VibeDoc cannot assess symptoms or emergencies/i)).toBeVisible();
     await expect(page.getByText(/Appointment recorded/i)).toHaveCount(0);
-    const state = await request.get('/api/demo/state');
-    const body = await state.json() as DemoWorkflowSnapshot;
-    expect(body.exceptions).toHaveLength(1);
-    expect(body.resourceEvidence.some((item) => item.resourceType === 'Appointment')).toBe(false);
+    const stateText = await page.evaluate(async () => await fetch('/api/demo/state').then(async (response) => await response.text()));
+    expect(stateText).toContain('"exceptions":[{');
+    expect(stateText).not.toContain('"resourceType":"Appointment"');
+  });
+
+  test('uncertain identity reveals no patient and creates one owned exception', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /Replay uncertain identity/i }).click();
+    await expect(page.getByRole('heading', { name: /Identity could not be confirmed/i })).toBeVisible();
+    await expect(page.getByText(/No patient information was disclosed/i)).toBeVisible();
+    const stateText = await page.evaluate(async () => await fetch('/api/demo/state').then(async (response) => await response.text()));
+    expect(stateText).toContain('"category":"identity"');
+    expect(stateText).not.toContain('Maria');
+    expect(stateText).not.toContain('"resourceType":"Patient"');
+    expect(stateText).not.toContain('"resourceType":"Appointment"');
   });
 });

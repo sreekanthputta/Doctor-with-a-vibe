@@ -48,7 +48,7 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
         </ul>
       </section>
 
-      <section className="vd-evidence-card" aria-labelledby="resolved-task-title">
+      {task ? <section className="vd-evidence-card" aria-labelledby="resolved-task-title">
         <h3 id="resolved-task-title">Resolved Task history</h3>
         <p><strong>Completed</strong> · <code>{task.reference}</code> · Version {task.versionId}</p>
         <dl>
@@ -58,9 +58,14 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
           <div><dt>Resolution</dt><dd>{task.resolutionSummary}</dd></div>
           <div><dt>Sequence</dt><dd>{task.linkageSummary}</dd></div>
         </dl>
-      </section>
+      </section> : (
+        <section className="vd-evidence-card" aria-label="Open Task history">
+          <h3>Task remains open</h3>
+          <p>Required-field resolution has not been completed.</p>
+        </section>
+      )}
 
-      <section className="vd-evidence-card" aria-labelledby="eligibility-linkage-title">
+      {eligibility ? <section className="vd-evidence-card" aria-labelledby="eligibility-linkage-title">
         <h3 id="eligibility-linkage-title">Eligibility evidence linkage</h3>
         <p><strong>{eligibility.summary}</strong></p>
         <ol className="vd-evidence-linkage">
@@ -74,7 +79,12 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
           {eligibility.providerMode}
         </p>
         <time dateTime={eligibility.sourceTimestamp}>{eligibility.sourceTimestamp}</time>
-      </section>
+      </section> : (
+        <section className="vd-evidence-card" aria-label="Eligibility not run">
+          <h3>Eligibility evidence linkage</h3>
+          <p>Not run · waiting for the required member ID.</p>
+        </section>
+      )}
 
       <section className="vd-evidence-card vd-security-event" aria-labelledby="security-event-title">
         <h3 id="security-event-title">Sanitized application security event</h3>
