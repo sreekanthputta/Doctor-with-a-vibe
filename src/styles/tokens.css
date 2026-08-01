@@ -1,0 +1,22 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-panel: 1rem;
+  --content-width: 72rem;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+.shell { min-height: 100vh; padding: var(--space-8); }
+.demo-banner { font-size: 0.875rem; margin: 0 auto var(--space-6); max-width: var(--content-width); }
+.shell-card { max-width: var(--content-width); margin: 0 auto; padding: var(--space-8); border: 1px solid currentColor; border-radius: var(--radius-panel); }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.75rem; }
+h1 { max-width: 20ch; }
+p { max-width: 62ch; line-height: 1.6; }

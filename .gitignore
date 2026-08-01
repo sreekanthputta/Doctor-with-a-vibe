@@ -7,4 +7,6 @@ playwright-report/
 test-results/
 coverage/
 dist/
+dist-server/
 node_modules/
+*.tsbuildinfo
