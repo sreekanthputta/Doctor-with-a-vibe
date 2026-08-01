@@ -3,8 +3,10 @@ import { config } from 'dotenv';
 import path from 'node:path';
 import process from 'node:process';
 import { z } from 'zod';
+import { MedplumClient } from '@medplum/core';
 import { parseServerEnv } from './env.js';
 import { DemoWorkflowStore } from './demo-workflow-store.js';
+import { MedplumDemoPersistence } from '../adapters/medplum-demo-persistence.js';
 import { SessionStore } from './session-store.js';
 import type { SessionContext } from '../contracts/session.js';
 
@@ -14,7 +16,13 @@ const app = express();
 const environment = parseServerEnv(process.env);
 const port = environment.port;
 const distPath = path.resolve(process.cwd(), 'dist');
-const demoWorkflow = new DemoWorkflowStore();
+const demoPersistence = await (async () => {
+  if (!environment.useLiveMedplum) return undefined;
+  const client = new MedplumClient({ baseUrl: environment.medplumBaseUrl });
+  await client.startClientLogin(environment.medplumClientId!, environment.medplumClientSecret!);
+  return MedplumDemoPersistence.fromClient(client, { runId: `server-${Date.now()}` });
+})();
+const demoWorkflow = new DemoWorkflowStore(undefined, undefined, demoPersistence);
 const sessions = new SessionStore();
 const demoRequestSchema = z.object({ message: z.string().trim().min(1) }).strict();
 const memberIdSchema = z.object({ memberId: z.string() }).strict();
@@ -102,7 +110,7 @@ app.get('/api/demo/state', (_request, response) => {
   if (!session) return response.status(401).json({ error: 'A demo session is required' });
   if (session.role === 'demo-access') return response.status(403).json({ error: 'Choose a demo persona first' });
   if (session.role === 'public' && session.sessionId !== publicWorkflowOwnerSessionId) {
-    return response.status(200).json({ phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false });
+    return response.status(200).json({ phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false, providerMode: environment.useLiveMedplum ? 'live' : 'fixture' });
   }
   return response.status(200).json(demoWorkflow.snapshot());
 });
@@ -129,14 +137,15 @@ app.post('/api/session/transition', (request, response) => {
   setSessionCookie(response, session.sessionId);
   return response.status(200).json(clientSession(session));
 });
-app.post('/api/demo/reset', (request, response) => {
+app.post('/api/demo/reset', async (request, response) => {
   if (!environment.enableDemoReset || request.get('x-demo-reset-token') !== environment.demoResetToken) {
     return response.status(404).json({ error: 'Not found' });
   }
+  const result = await demoWorkflow.reset();
   publicWorkflowOwnerSessionId = undefined;
-  response.status(200).json(demoWorkflow.reset());
+  response.status(200).json(result);
 });
-app.post('/api/demo/identity', (request, response) => {
+app.post('/api/demo/identity', async (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
   const parsed = identitySchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json({ error: 'Valid synthetic identity fields are required' });
@@ -145,7 +154,7 @@ app.post('/api/demo/identity', (request, response) => {
   if (publicWorkflowOwnerSessionId && publicWorkflowOwnerSessionId !== sessionId) {
     return response.status(409).json({ error: 'Another synthetic workflow is already active' });
   }
-  const result = demoWorkflow.submitIdentity(parsed.data);
+  const result = await demoWorkflow.submitIdentity(parsed.data);
   if (result.identityVerified || result.phase === 'stopped') publicWorkflowOwnerSessionId = sessionId;
   return response.status(200).json(result);
 });
@@ -162,14 +171,14 @@ app.post('/api/demo/request', async (request, response) => {
     return response.status(409).json({ error: 'Verify identity before scheduling' });
   }
 });
-app.post('/api/demo/identity-replay', (request, response) => {
+app.post('/api/demo/identity-replay', async (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
   const sessionId = cookieSessionId(request);
   if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
   if (publicWorkflowOwnerSessionId && publicWorkflowOwnerSessionId !== sessionId) {
     return response.status(409).json({ error: 'Another synthetic workflow is already active' });
   }
-  const result = demoWorkflow.submitUncertainIdentityReplay();
+  const result = await demoWorkflow.submitUncertainIdentityReplay();
   publicWorkflowOwnerSessionId = sessionId;
   return response.status(200).json(result);
 });

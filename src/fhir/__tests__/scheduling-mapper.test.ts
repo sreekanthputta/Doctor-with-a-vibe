@@ -63,4 +63,15 @@ describe('Scheduling mapping', () => {
       participant: [],
     })).toThrow('Appointment response is not booked');
   });
+
+  it('rejects a booked response correlated to a different Slot', () => {
+    expect(() => captureBookedReferences({
+      resourceType: 'Appointment',
+      id: 'server-appt-9',
+      meta: { versionId: '1' },
+      status: 'booked',
+      slot: [{ reference: 'Slot/different' }],
+      participant: [],
+    }, 'Slot/requested')).toThrow('does not match the requested Slot');
+  });
 });

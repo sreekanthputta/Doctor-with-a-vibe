@@ -1,15 +1,49 @@
 import { describe, expect, it } from 'vitest';
 import { DemoWorkflowStore } from '../../src/server/demo-workflow-store';
+import type { DemoPersistence, DemoPersistenceSnapshot } from '../../src/server/demo-persistence';
 
-function verifyMaria(store: DemoWorkflowStore): void {
-  store.submitIdentity({ givenName: 'Maria', familyName: 'Lopez', birthDate: '1974-02-14', postalCode: '60601' });
+class RecordingPersistence implements DemoPersistence {
+  readonly calls: string[] = [];
+
+  start(): Promise<DemoPersistenceSnapshot> {
+    this.calls.push('start');
+    return Promise.resolve({
+      phase: 'needs-attention',
+      evidence: [{ resourceType: 'Appointment', reference: 'Appointment/live-1', version: '7', sourceUpdatedAt: '2026-08-01T18:00:00Z', workflowRole: 'Scheduling' }],
+    });
+  }
+
+  complete(memberId: string): Promise<DemoPersistenceSnapshot> {
+    this.calls.push(`complete:${memberId}`);
+    return Promise.resolve({
+      phase: 'ready',
+      evidence: [{ resourceType: 'CoverageEligibilityResponse', reference: 'CoverageEligibilityResponse/live-2', version: '3', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Eligibility evidence' }],
+    });
+  }
+
+  recordUncertainIdentity(correlationId: string): Promise<DemoPersistenceSnapshot> {
+    this.calls.push(`uncertain:${correlationId}`);
+    return Promise.resolve({
+      phase: 'stopped',
+      evidence: [{ resourceType: 'Task', reference: 'Task/uncertain-1', version: '1', sourceUpdatedAt: '2026-08-01T18:00:00Z', workflowRole: 'Owned exception' }],
+    });
+  }
+
+  reset(): Promise<{ deletedCount: number; verified: true }> {
+    this.calls.push('reset');
+    return Promise.resolve({ deletedCount: 2, verified: true });
+  }
+}
+
+async function verifyMaria(store: DemoWorkflowStore): Promise<void> {
+  await store.submitIdentity({ givenName: 'Maria', familyName: 'Lopez', birthDate: '1974-02-14', postalCode: '60601' });
 }
 
 describe('DemoWorkflowStore vertical slice', () => {
   it('moves one validated request from empty to Needs attention to Ready', async () => {
     const store = new DemoWorkflowStore();
     expect(store.snapshot().phase).toBe('empty');
-    verifyMaria(store);
+    await verifyMaria(store);
 
     await store.submitRequest('I need an annual wellness visit in the morning');
     const needsAttention = store.snapshot();
@@ -24,9 +58,22 @@ describe('DemoWorkflowStore vertical slice', () => {
     expect(ready.resourceEvidence.map((item) => item.resourceType)).toEqual(expect.arrayContaining(['CoverageEligibilityRequest', 'CoverageEligibilityResponse', 'Provenance']));
   });
 
+  it('uses reread persistence evidence for the visible workflow and reset', async () => {
+    const persistence = new RecordingPersistence();
+    const store = new DemoWorkflowStore(undefined, undefined, persistence);
+    await verifyMaria(store);
+
+    await store.submitRequest('I need an annual wellness visit');
+    expect(store.snapshot().resourceEvidence).toEqual([expect.objectContaining({ reference: 'Appointment/live-1', version: '7' })]);
+    await store.submitMemberId('AETNA-DEMO-2048');
+    expect(store.snapshot().resourceEvidence).toEqual([expect.objectContaining({ reference: 'CoverageEligibilityResponse/live-2', version: '3' })]);
+    await store.reset();
+    expect(persistence.calls).toEqual(['start', 'complete:AETNA-DEMO-2048', 'reset']);
+  });
+
   it('fails closed on mixed clinical input with one exception and no appointment', async () => {
     const store = new DemoWorkflowStore();
-    verifyMaria(store);
+    await verifyMaria(store);
     await store.submitRequest('I have chest pain and need an annual wellness visit');
     const stopped = store.snapshot();
     expect(stopped.phase).toBe('stopped');
@@ -38,7 +85,7 @@ describe('DemoWorkflowStore vertical slice', () => {
 
   it('preserves an unmatched administrative category and neutral stop copy', async () => {
     const store = new DemoWorkflowStore();
-    verifyMaria(store);
+    await verifyMaria(store);
     await store.submitRequest('I need an annual welness vist');
     const stopped = store.snapshot();
     expect(stopped.exceptions[0]?.category).toBe('administrative-unmatched');
@@ -48,15 +95,15 @@ describe('DemoWorkflowStore vertical slice', () => {
 
   it('cannot become Ready with a wrong or missing member ID', async () => {
     const store = new DemoWorkflowStore();
-    verifyMaria(store);
+    await verifyMaria(store);
     await store.submitRequest('I need an annual wellness visit');
     await expect(store.submitMemberId('wrong')).rejects.toThrow(/member ID/i);
     expect(store.snapshot().phase).toBe('needs-attention');
   });
 
-  it('stops an uncertain identity without Patient or Appointment evidence', () => {
+  it('stops an uncertain identity without Patient or Appointment evidence', async () => {
     const store = new DemoWorkflowStore();
-    const stopped = store.submitUncertainIdentityReplay();
+    const stopped = await store.submitUncertainIdentityReplay();
     expect(stopped.phase).toBe('stopped');
     expect(stopped.exceptions).toEqual([expect.objectContaining({ category: 'identity', status: 'requested' })]);
     expect(stopped.resourceEvidence).toEqual([]);

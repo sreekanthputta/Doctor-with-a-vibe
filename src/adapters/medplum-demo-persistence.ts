@@ -15,7 +15,7 @@ import { buildDemoPatientCreate } from '../fhir/patient';
 import { buildVersionedProvenance } from '../fhir/provenance';
 import { buildQuestionnaireResponse, planQuestionnaireResponseCompletion } from '../fhir/questionnaire';
 import { buildMutationPlan, type FhirRepository } from '../fhir/repository';
-import { buildAppointmentDraft } from '../fhir/scheduling';
+import { buildAppointmentDraft, captureBookedReferences } from '../fhir/scheduling';
 import { buildMissingMemberTask, buildUncertainIdentityTask } from '../fhir/tasks';
 import type {
   DemoIdentity,
@@ -149,6 +149,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
       }),
       status: 'booked',
     }, 'appointment');
+    captureBookedReferences(appointment, this.#seedReferences.slotReference);
     const appointmentReference = referenceOf(appointment);
 
     const coverage = await this.#create(buildCoverage({

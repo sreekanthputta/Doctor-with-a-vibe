@@ -67,7 +67,7 @@ export function buildAppointmentDraft(input: {
   };
 }
 
-export function captureBookedReferences(appointment: Appointment): {
+export function captureBookedReferences(appointment: Appointment, expectedSlotReference?: string): {
   appointmentReference: string;
   appointmentVersionId: string;
   slotReferences: string[];
@@ -79,6 +79,9 @@ export function captureBookedReferences(appointment: Appointment): {
     throw new Error('Booked Appointment requires id, versionId, and Slot references');
   }
   const slotReference = requireSingleSlotReference(appointment);
+  if (expectedSlotReference && slotReference !== expectedSlotReference) {
+    throw new Error('Booked Appointment does not match the requested Slot');
+  }
   return {
     appointmentReference: `Appointment/${appointment.id}`,
     appointmentVersionId: appointment.meta.versionId,

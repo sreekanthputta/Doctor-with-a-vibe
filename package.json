@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:unit": "vitest run src",
     "test:e2e": "playwright test",
-    "test:live:medplum": "RUN_LIVE_MEDPLUM_TESTS=true vitest run tests/live/medplum-repository.live.test.ts",
+    "test:live:medplum": "RUN_LIVE_MEDPLUM_TESTS=true vitest run tests/live/medplum-repository.live.test.ts tests/live/medplum-full-graph.live.test.ts",
     "build": "tsc -b && vite build && vite build --ssr src/server/index.ts --outDir dist-server",
     "gate:0a": "bash scripts/gate-0a.sh"
   },

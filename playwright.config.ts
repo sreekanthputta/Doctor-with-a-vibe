@@ -13,7 +13,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run build && PORT=43119 NODE_ENV=test ENABLE_DEMO_RESET=true DEMO_RESET_TOKEN=vibedoc-e2e-reset npm run start',
+    command: 'npm run build && PORT=43119 NODE_ENV=test USE_LIVE_MEDPLUM=false ENABLE_DEMO_RESET=true DEMO_RESET_TOKEN=vibedoc-e2e-reset npm run start',
     url: 'http://127.0.0.1:43119/health',
     timeout: 60_000,
     reuseExistingServer: false,

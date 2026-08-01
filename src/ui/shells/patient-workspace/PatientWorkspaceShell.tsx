@@ -8,6 +8,7 @@ import type { SurfaceState } from '../../view-models';
 type PatientWorkspaceShellProps = Readonly<{
   state: SurfaceState;
   visit: ReadyVisitVM;
+  sourceLabel?: string;
   onSubmitMemberId: (memberId: string) => void;
 }>;
 
@@ -20,6 +21,7 @@ const timestampFormatter = new Intl.DateTimeFormat('en-US', {
 export function PatientWorkspaceShell({
   state,
   visit,
+  sourceLabel = 'Synthetic deterministic FHIR fixture',
   onSubmitMemberId,
 }: PatientWorkspaceShellProps): React.JSX.Element {
   const [memberId, setMemberId] = useState('');
@@ -78,7 +80,7 @@ export function PatientWorkspaceShell({
         <aside className="vd-panel" aria-labelledby="source-title">
           <h2 id="source-title">Sources</h2>
           <p>Source updated {timestampFormatter.format(new Date(visit.sourceUpdatedAt))}</p>
-          <p>Medplum · deterministic fixture</p>
+          <p>{sourceLabel}</p>
           <p>
             Provenance {visit.provenanceState === 'confirmed' ? 'confirmed' : visit.provenanceState}
           </p>

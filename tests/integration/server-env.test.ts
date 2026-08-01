@@ -13,8 +13,18 @@ describe('server environment boundary', () => {
 
   it('requires credentials only when a live provider gate is enabled', () => {
     expect(() => parseServerEnv({ RUN_LIVE_MEDPLUM_TESTS: 'true' })).toThrow(/MEDPLUM_CLIENT_ID/);
+    expect(() => parseServerEnv({ USE_LIVE_MEDPLUM: 'true' })).toThrow(/MEDPLUM_CLIENT_ID/);
     expect(() => parseServerEnv({ RUN_LIVE_DEEPGRAM_TESTS: 'true' })).toThrow(/DEEPGRAM_API_KEY/);
     expect(() => parseServerEnv({ RUN_LIVE_STEDI_TESTS: 'true' })).toThrow(/STEDI_API_KEY/);
+  });
+
+  it('enables live workflow persistence only with server-side Medplum credentials', () => {
+    expect(parseServerEnv({
+      NODE_ENV: 'development',
+      USE_LIVE_MEDPLUM: 'true',
+      MEDPLUM_CLIENT_ID: 'synthetic-client',
+      MEDPLUM_CLIENT_SECRET: 'synthetic-secret',
+    })).toMatchObject({ useLiveMedplum: true });
   });
 
   it('rejects any browser-prefixed provider secret', () => {

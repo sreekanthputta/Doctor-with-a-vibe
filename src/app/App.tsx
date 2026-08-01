@@ -95,6 +95,7 @@ export function App(): React.JSX.Element {
       <PatientWorkspaceShell
         state={accessDenied ? 'forbidden' : loadFailed ? 'error' : snapshot ? snapshot.visit ? 'ready' : 'empty' : 'loading'}
         visit={snapshot?.visit ?? physicianVisits[0]}
+        sourceLabel={snapshot?.providerMode === 'live' ? 'Medplum · live committed resources' : 'Synthetic deterministic FHIR fixture'}
         onSubmitMemberId={(memberId) => {
           if (!session) return;
           void mutateSnapshot('/api/demo/member-id', { memberId }, session.csrfToken).then(setSnapshot).catch(() => setLoadFailed(true));
@@ -106,11 +107,12 @@ export function App(): React.JSX.Element {
   if (shell === 'physician') {
     const visits: PhysicianVisitVM[] = snapshot?.visit ? (() => {
       const base = physicianVisits[0];
-      if (snapshot.visit.status === 'ready') return [{ ...base, ...snapshot.visit, sourceLabel: 'Medplum · deterministic fixture' }];
+      const sourceLabel = snapshot.providerMode === 'live' ? 'Medplum · live committed resources' : 'Synthetic deterministic FHIR fixture';
+      if (snapshot.visit.status === 'ready') return [{ ...base, ...snapshot.visit, sourceLabel }];
       return [{
         ...base,
         ...snapshot.visit,
-        sourceLabel: 'Medplum · deterministic fixture',
+        sourceLabel,
         evidenceResources: base.evidenceResources.filter((item) => [
           'booking-record', 'patient-reported-intake', 'coverage-record', 'follow-up-request', 'delivered-follow-up',
         ].includes(item.workflowRole)),
@@ -146,9 +148,11 @@ export function App(): React.JSX.Element {
   return (
     <PublicAccessShell
       state={loadFailed ? 'error' : snapshot?.phase === 'stopped' ? 'stopped' : snapshot ? 'ready' : 'loading'}
-      providerMode="fixture"
+      providerMode={snapshot?.providerMode ?? 'fixture'}
       traceContextKey={`public:${snapshot?.phase ?? 'loading'}`}
-      traces={snapshot?.phase === 'needs-attention' || snapshot?.phase === 'ready' ? [completedBookingTrace] : []}
+      traces={snapshot?.phase === 'needs-attention' || snapshot?.phase === 'ready'
+        ? [{ ...completedBookingTrace, providerMode: snapshot.providerMode }]
+        : []}
       stopCopy={snapshot?.stopCopy}
       stopHeading={snapshot?.exceptions[0]?.category === 'identity' ? 'Identity could not be confirmed' : undefined}
       onRunUncertainIdentity={() => {

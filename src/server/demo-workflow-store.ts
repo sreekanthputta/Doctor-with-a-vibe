@@ -5,6 +5,7 @@ import { createWorkflowState, reduceWorkflow, type DemoWorkflowState } from '../
 import { DEMO_V1 } from '../test/fixtures/demo-v1.js';
 import type { StopCategory } from '../domain/exception-policy.js';
 import { decideDemoIdentity } from '../domain/identity-gate.js';
+import type { DemoIdentity, DemoPersistence } from './demo-persistence.js';
 
 export type DemoResourceEvidence = {
   resourceType: string;
@@ -28,26 +29,33 @@ export type DemoWorkflowSnapshot = {
   resourceEvidence: DemoResourceEvidence[];
   stopCopy?: string;
   identityVerified: boolean;
+  providerMode: 'fixture' | 'live';
 };
 
 export class DemoWorkflowStore {
   #domain: DemoWorkflowState = createWorkflowState('demo-v1:workflow:maria');
-  #snapshot: DemoWorkflowSnapshot = { phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false };
+  #snapshot: DemoWorkflowSnapshot = { phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false, providerMode: 'fixture' };
   #identityVerified = false;
+  #verifiedIdentity?: DemoIdentity;
 
   constructor(
     private readonly conversation = new ScriptedConversationAdapter(),
     private readonly eligibility = new StediEligibilityFixture(),
-  ) {}
+    private readonly persistence?: DemoPersistence,
+  ) {
+    this.#snapshot.providerMode = this.#providerMode();
+  }
 
   snapshot(): DemoWorkflowSnapshot {
     return structuredClone(this.#snapshot);
   }
 
-  reset(): DemoWorkflowSnapshot {
+  async reset(): Promise<DemoWorkflowSnapshot> {
+    await this.persistence?.reset();
     this.#domain = createWorkflowState('demo-v1:workflow:maria');
     this.#identityVerified = false;
-    this.#snapshot = { phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false };
+    this.#verifiedIdentity = undefined;
+    this.#snapshot = { phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false, providerMode: this.#providerMode() };
     return this.snapshot();
   }
 
@@ -61,6 +69,7 @@ export class DemoWorkflowStore {
         phase: 'stopped',
         resourceEvidence: [],
         identityVerified: this.#identityVerified,
+        providerMode: this.#providerMode(),
         stopCopy: decision.safeCopy,
         exceptions: [{
           id: decision.exceptionCommand.commandId,
@@ -73,6 +82,9 @@ export class DemoWorkflowStore {
     }
 
     if (this.#snapshot.phase !== 'empty') return this.snapshot();
+    if (!this.#verifiedIdentity) throw new Error('Verified identity details are unavailable');
+    const persisted = await this.persistence?.start(this.#verifiedIdentity);
+    if (persisted && persisted.phase !== 'needs-attention') throw new Error('Persistence did not commit a needs-attention workflow');
     this.#domain = reduceWorkflow(this.#domain, { type: 'identity-verified' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'appointment-booked' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'intake-saved', complete: false });
@@ -80,22 +92,24 @@ export class DemoWorkflowStore {
       phase: 'needs-attention',
       exceptions: [],
       visit: this.#visit('needs-attention'),
-      resourceEvidence: this.#initialEvidence(),
+      resourceEvidence: persisted?.evidence ?? this.#initialEvidence(),
       identityVerified: true,
+      providerMode: this.#providerMode(),
     };
     return this.snapshot();
   }
 
-  submitIdentity(input: { givenName: string; familyName: string; birthDate: string; postalCode: string }): DemoWorkflowSnapshot {
+  async submitIdentity(input: DemoIdentity): Promise<DemoWorkflowSnapshot> {
     if (this.#snapshot.phase !== 'empty') return this.snapshot();
     const identity = decideDemoIdentity({ kind: 'identity-submission', ...input }, []);
-    if (identity.outcome === 'uncertain') return this.#stopForIdentity();
+    if (identity.outcome === 'uncertain') return this.#stopForIdentity(true);
     this.#identityVerified = true;
-    this.#snapshot = { ...this.#snapshot, identityVerified: true };
+    this.#verifiedIdentity = structuredClone(input);
+    this.#snapshot = { ...this.#snapshot, identityVerified: true, providerMode: this.#providerMode() };
     return this.snapshot();
   }
 
-  submitUncertainIdentityReplay(): DemoWorkflowSnapshot {
+  async submitUncertainIdentityReplay(): Promise<DemoWorkflowSnapshot> {
     if (this.#snapshot.phase !== 'empty') return this.snapshot();
     const identity = decideDemoIdentity({
       kind: 'identity-submission',
@@ -105,12 +119,16 @@ export class DemoWorkflowStore {
       postalCode: DEMO_V1.patient.postalCode,
     }, []);
     if (identity.outcome !== 'uncertain') throw new Error('Uncertain identity fixture did not stop');
-    return this.#stopForIdentity();
+    return this.#stopForIdentity(true);
   }
 
   async submitMemberId(memberId: string): Promise<DemoWorkflowSnapshot> {
     if (this.#snapshot.phase !== 'needs-attention') throw new Error('The visit is not waiting for a member ID');
-    await this.eligibility.check({ memberId });
+    const persisted = this.persistence
+      ? await this.persistence.complete(memberId)
+      : undefined;
+    if (persisted && persisted.phase !== 'ready') throw new Error('Persistence did not commit a ready workflow');
+    if (!this.persistence) await this.eligibility.check({ memberId });
     this.#domain = reduceWorkflow(this.#domain, { type: 'member-id-supplied' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'coverage-updated' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'eligibility-started' });
@@ -121,8 +139,9 @@ export class DemoWorkflowStore {
       phase: 'ready',
       exceptions: [],
       identityVerified: true,
+      providerMode: this.#providerMode(),
       visit: this.#visit('ready'),
-      resourceEvidence: [
+      resourceEvidence: persisted?.evidence ?? [
         ...this.#initialEvidence(),
         this.#evidence('CoverageEligibilityRequest', 'eligibility-request', 'Eligibility input'),
         this.#evidence('CoverageEligibilityResponse', 'eligibility-response', 'Eligibility evidence'),
@@ -147,12 +166,15 @@ export class DemoWorkflowStore {
     };
   }
 
-  #stopForIdentity(): DemoWorkflowSnapshot {
+  async #stopForIdentity(persist: boolean): Promise<DemoWorkflowSnapshot> {
+    const persisted = persist
+      ? await this.persistence?.recordUncertainIdentity('demo-v1:exception:identity:uncertain')
+      : undefined;
     this.#domain = reduceWorkflow(this.#domain, { type: 'stopped', category: 'identity' });
     this.#snapshot = {
       phase: 'stopped',
       stopCopy: 'VibeDoc could not verify this synthetic identity. No patient information was disclosed.',
-      resourceEvidence: [],
+      resourceEvidence: persisted?.evidence ?? [],
       exceptions: [{
         id: 'demo-v1:exception:identity:uncertain',
         category: 'identity',
@@ -160,6 +182,7 @@ export class DemoWorkflowStore {
         ownerReference: DEMO_V1.practitionerRoleReference,
       }],
       identityVerified: false,
+      providerMode: this.#providerMode(),
     };
     return this.snapshot();
   }
@@ -182,5 +205,9 @@ export class DemoWorkflowStore {
       sourceUpdatedAt: DEMO_V1.clock,
       workflowRole,
     };
+  }
+
+  #providerMode(): 'fixture' | 'live' {
+    return this.persistence ? 'live' : 'fixture';
   }
 }
