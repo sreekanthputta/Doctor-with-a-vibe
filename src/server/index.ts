@@ -19,7 +19,14 @@ const sessions = new SessionStore();
 const demoRequestSchema = z.object({ message: z.string().trim().min(1) }).strict();
 const memberIdSchema = z.object({ memberId: z.string() }).strict();
 const transitionSchema = z.object({ persona: z.enum(['maria-demo', 'maya-demo']) }).strict();
+const identitySchema = z.object({
+  givenName: z.string().trim().min(1),
+  familyName: z.string().trim().min(1),
+  birthDate: z.iso.date(),
+  postalCode: z.string().trim().min(3).max(12),
+}).strict();
 const sessionCookieName = '__Host-vibedoc_session';
+let publicWorkflowOwnerSessionId: string | undefined;
 
 function cookieSessionId(request: Request): string | undefined {
   const cookie = request.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${sessionCookieName}=`));
@@ -33,6 +40,16 @@ function currentSession(request: Request): SessionContext | undefined {
 
 function setSessionCookie(response: Response, sessionId: string): void {
   response.setHeader('Set-Cookie', `${sessionCookieName}=${encodeURIComponent(sessionId)}; Secure; HttpOnly; SameSite=Lax; Path=/`);
+}
+
+function clientSession(session: SessionContext): Omit<SessionContext, 'sessionId'> {
+  return {
+    role: session.role,
+    persona: session.persona,
+    csrfToken: session.csrfToken,
+    expiresAt: session.expiresAt,
+    voiceCapability: session.voiceCapability,
+  };
 }
 
 function sameOrigin(request: Request): boolean {
@@ -59,7 +76,7 @@ function bootstrapSession(request: Request, response: Response, role: 'public' |
   }
   const session = existing ?? sessions.issue(role, 'anonymous');
   if (!existing) setSessionCookie(response, session.sessionId);
-  response.status(200).json(session);
+  response.status(200).json(clientSession(session));
 }
 
 app.disable('x-powered-by');
@@ -74,6 +91,10 @@ app.get('/health', (_request, response) => {
 app.get('/api/demo/state', (_request, response) => {
   const session = currentSession(_request);
   if (!session) return response.status(401).json({ error: 'A demo session is required' });
+  if (session.role === 'demo-access') return response.status(403).json({ error: 'Choose a demo persona first' });
+  if (session.role === 'public' && session.sessionId !== publicWorkflowOwnerSessionId) {
+    return response.status(200).json({ phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false });
+  }
   return response.status(200).json(demoWorkflow.snapshot());
 });
 app.get('/api/session/public', (request, response) => {
@@ -85,7 +106,7 @@ app.get('/api/session/demo', (request, response) => {
 app.get('/api/session/current', (request, response) => {
   const session = currentSession(request);
   if (!session) return response.status(401).json({ error: 'A demo session is required' });
-  return response.status(200).json(session);
+  return response.status(200).json(clientSession(session));
 });
 app.post('/api/session/transition', (request, response) => {
   if (!authorizeMutation(request, 'demo-access')) return response.status(403).json({ error: 'Demo transition is not authorized' });
@@ -97,23 +118,39 @@ app.post('/api/session/transition', (request, response) => {
     ? sessions.replace(sessionId, 'patient-demo', 'maria-demo')
     : sessions.replace(sessionId, 'physician-demo', 'maya-demo');
   setSessionCookie(response, session.sessionId);
-  return response.status(200).json(session);
+  return response.status(200).json(clientSession(session));
 });
 app.post('/api/demo/reset', (request, response) => {
-  if (environment.nodeEnv === 'production' || request.get('x-demo-reset-token') !== 'vibedoc-e2e-reset') {
+  if (!environment.enableDemoReset || request.get('x-demo-reset-token') !== environment.demoResetToken) {
     return response.status(404).json({ error: 'Not found' });
   }
+  publicWorkflowOwnerSessionId = undefined;
   response.status(200).json(demoWorkflow.reset());
+});
+app.post('/api/demo/identity', (request, response) => {
+  if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
+  const parsed = identitySchema.safeParse(request.body);
+  if (!parsed.success) return response.status(400).json({ error: 'Valid synthetic identity fields are required' });
+  const sessionId = cookieSessionId(request);
+  if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
+  publicWorkflowOwnerSessionId = sessionId;
+  return response.status(200).json(demoWorkflow.submitIdentity(parsed.data));
 });
 app.post('/api/demo/request', async (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
   const parsed = demoRequestSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json({ error: 'A message is required' });
-  const result = await demoWorkflow.submitRequest(parsed.data.message);
-  return response.status(200).json(result);
+  try {
+    const result = await demoWorkflow.submitRequest(parsed.data.message);
+    return response.status(200).json(result);
+  } catch {
+    return response.status(409).json({ error: 'Verify identity before scheduling' });
+  }
 });
 app.post('/api/demo/identity-replay', (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
+  const sessionId = cookieSessionId(request);
+  if (sessionId) publicWorkflowOwnerSessionId = sessionId;
   return response.status(200).json(demoWorkflow.submitUncertainIdentityReplay());
 });
 app.post('/api/demo/member-id', async (request, response) => {

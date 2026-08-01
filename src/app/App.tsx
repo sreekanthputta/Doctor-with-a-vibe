@@ -9,22 +9,24 @@ import type { DemoWorkflowSnapshot } from '../server/demo-workflow-store';
 import type { ExceptionVM, PhysicianVisitVM } from '../ui/view-models';
 import type { SessionContext } from '../contracts/session';
 
+type ClientSession = Omit<SessionContext, 'sessionId'>;
+
 async function readSnapshot(): Promise<DemoWorkflowSnapshot> {
   const response = await fetch('/api/demo/state', { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('Unable to load demo state');
   return await response.json() as DemoWorkflowSnapshot;
 }
 
-async function bootstrapSession(path: '/api/session/public' | '/api/session/demo'): Promise<SessionContext> {
+async function bootstrapSession(path: '/api/session/public' | '/api/session/demo'): Promise<ClientSession> {
   const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('Unable to create demo session');
-  return await response.json() as SessionContext;
+  return await response.json() as ClientSession;
 }
 
-async function readCurrentSession(): Promise<SessionContext> {
+async function readCurrentSession(): Promise<ClientSession> {
   const response = await fetch('/api/session/current', { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('A role-bound demo session is required');
-  return await response.json() as SessionContext;
+  return await response.json() as ClientSession;
 }
 
 async function mutateSnapshot(path: string, body: Record<string, string>, csrfToken: string): Promise<DemoWorkflowSnapshot> {
@@ -41,8 +43,9 @@ async function mutateSnapshot(path: string, body: Record<string, string>, csrfTo
 export function App(): React.JSX.Element {
   const shell = resolveShell(window.location.pathname);
   const [snapshot, setSnapshot] = useState<DemoWorkflowSnapshot>();
-  const [session, setSession] = useState<SessionContext>();
+  const [session, setSession] = useState<ClientSession>();
   const [loadFailed, setLoadFailed] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
     const initialize = async (): Promise<void> => {
@@ -51,7 +54,13 @@ export function App(): React.JSX.Element {
         setSession(await bootstrapSession('/api/session/demo'));
         return;
       }
-      setSession(await readCurrentSession());
+      const current = await readCurrentSession();
+      const expectedRole = shell === 'patient' ? 'patient-demo' : 'physician-demo';
+      if (current.role !== expectedRole) {
+        setAccessDenied(true);
+        return;
+      }
+      setSession(current);
       setSnapshot(await readSnapshot());
     };
     void initialize().catch(() => setLoadFailed(true));
@@ -84,7 +93,7 @@ export function App(): React.JSX.Element {
   if (shell === 'patient') {
     return (
       <PatientWorkspaceShell
-        state={loadFailed ? 'error' : snapshot ? snapshot.visit ? 'ready' : 'empty' : 'loading'}
+        state={accessDenied ? 'forbidden' : loadFailed ? 'error' : snapshot ? snapshot.visit ? 'ready' : 'empty' : 'loading'}
         visit={snapshot?.visit ?? physicianVisits[0]}
         onSubmitMemberId={(memberId) => {
           if (!session) return;
@@ -125,7 +134,7 @@ export function App(): React.JSX.Element {
     }));
     return (
       <PhysicianCockpitShell
-        state={loadFailed ? 'error' : snapshot ? visits.length > 0 ? 'ready' : 'empty' : 'loading'}
+        state={accessDenied ? 'forbidden' : loadFailed ? 'error' : snapshot ? visits.length > 0 ? 'ready' : 'empty' : 'loading'}
         visits={visits}
         exceptions={exceptions}
         onOpenVisit={() => undefined}
@@ -145,6 +154,11 @@ export function App(): React.JSX.Element {
       onRunUncertainIdentity={() => {
         if (!session) return;
         void mutateSnapshot('/api/demo/identity-replay', {}, session.csrfToken).then(setSnapshot).catch(() => setLoadFailed(true));
+      }}
+      identityVerified={snapshot?.identityVerified ?? false}
+      onSubmitIdentity={(identity) => {
+        if (!session) return;
+        void mutateSnapshot('/api/demo/identity', identity, session.csrfToken).then(setSnapshot).catch(() => setLoadFailed(true));
       }}
       onSubmit={(message) => {
         if (!session) return;

@@ -13,6 +13,11 @@ const providerLabels: Record<ProviderMode, string> = {
   prerecorded: 'Prerecorded replay',
 };
 
+function formString(data: FormData, key: string): string {
+  const value = data.get(key);
+  return typeof value === 'string' ? value : '';
+}
+
 type PublicAccessShellProps = Readonly<{
   state: PublicSurfaceState;
   providerMode: ProviderMode;
@@ -22,6 +27,8 @@ type PublicAccessShellProps = Readonly<{
   stopCopy?: string;
   stopHeading?: string;
   onRunUncertainIdentity?: () => void;
+  identityVerified?: boolean;
+  onSubmitIdentity?: (identity: { givenName: string; familyName: string; birthDate: string; postalCode: string }) => void;
 }>;
 
 export function PublicAccessShell({
@@ -33,6 +40,8 @@ export function PublicAccessShell({
   stopCopy,
   stopHeading,
   onRunUncertainIdentity,
+  identityVerified = true,
+  onSubmitIdentity,
 }: PublicAccessShellProps): React.JSX.Element {
   const [message, setMessage] = useState('');
 
@@ -66,6 +75,30 @@ export function PublicAccessShell({
             <h3>{stopHeading ?? 'Clinical content received — not assessed'}</h3>
             <p>{stopCopy ?? SAFETY_COPY}</p>
           </section>
+        ) : !identityVerified ? (
+          <form
+            className="vd-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              onSubmitIdentity?.({
+                givenName: formString(data, 'givenName'),
+                familyName: formString(data, 'familyName'),
+                birthDate: formString(data, 'birthDate'),
+                postalCode: formString(data, 'postalCode'),
+              });
+            }}
+          >
+            <h3>Verify synthetic identity</h3>
+            <label>First name<input name="givenName" autoComplete="off" required /></label>
+            <label>Last name<input name="familyName" autoComplete="off" required /></label>
+            <label>Date of birth<input name="birthDate" type="date" required /></label>
+            <label>Postal code<input name="postalCode" inputMode="numeric" required /></label>
+            <button type="submit">Continue</button>
+            {onRunUncertainIdentity ? (
+              <button type="button" onClick={onRunUncertainIdentity}>Replay uncertain identity</button>
+            ) : null}
+          </form>
         ) : (
           <form
             className="vd-composer"
@@ -88,11 +121,6 @@ export function PublicAccessShell({
               <button type="button" className="patient-target" aria-label="Talk to the front desk">
                 Talk to the front desk
               </button>
-              {onRunUncertainIdentity ? (
-                <button type="button" onClick={onRunUncertainIdentity}>
-                  Replay uncertain identity
-                </button>
-              ) : null}
             </div>
           </form>
         )}

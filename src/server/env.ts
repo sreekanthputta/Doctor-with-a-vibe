@@ -3,7 +3,7 @@ import { z } from 'zod';
 const booleanFlag = z.enum(['true', 'false']).default('false').transform((value) => value === 'true');
 
 const rawEnvironmentSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
   PORT: z.coerce.number().int().positive().max(65_535).default(3001),
   MEDPLUM_BASE_URL: z.url().default('https://api.medplum.com'),
   MEDPLUM_CLIENT_ID: z.string().min(1).optional(),
@@ -13,6 +13,8 @@ const rawEnvironmentSchema = z.object({
   RUN_LIVE_MEDPLUM_TESTS: booleanFlag,
   RUN_LIVE_DEEPGRAM_TESTS: booleanFlag,
   RUN_LIVE_STEDI_TESTS: booleanFlag,
+  ENABLE_DEMO_RESET: booleanFlag,
+  DEMO_RESET_TOKEN: z.string().min(16).optional(),
 }).passthrough().superRefine((value, context) => {
   const browserSecrets = Object.keys(value).filter((key) => key.startsWith('VITE_') && /(KEY|SECRET|TOKEN)/.test(key));
   if (browserSecrets.length > 0) {
@@ -22,6 +24,8 @@ const rawEnvironmentSchema = z.object({
   if (value.RUN_LIVE_MEDPLUM_TESTS && !value.MEDPLUM_CLIENT_SECRET) context.addIssue({ code: 'custom', message: 'MEDPLUM_CLIENT_SECRET is required' });
   if (value.RUN_LIVE_DEEPGRAM_TESTS && !value.DEEPGRAM_API_KEY) context.addIssue({ code: 'custom', message: 'DEEPGRAM_API_KEY is required' });
   if (value.RUN_LIVE_STEDI_TESTS && !value.STEDI_API_KEY) context.addIssue({ code: 'custom', message: 'STEDI_API_KEY is required' });
+  if (value.ENABLE_DEMO_RESET && value.NODE_ENV === 'production') context.addIssue({ code: 'custom', message: 'Demo reset cannot be enabled in production' });
+  if (value.ENABLE_DEMO_RESET && !value.DEMO_RESET_TOKEN) context.addIssue({ code: 'custom', message: 'DEMO_RESET_TOKEN is required when reset is enabled' });
 });
 
 export type ServerEnv = {
@@ -35,6 +39,8 @@ export type ServerEnv = {
   liveMedplum: boolean;
   liveDeepgram: boolean;
   liveStedi: boolean;
+  enableDemoReset: boolean;
+  demoResetToken?: string;
 };
 
 export function parseServerEnv(environment: Record<string, string | undefined>): ServerEnv {
@@ -50,5 +56,7 @@ export function parseServerEnv(environment: Record<string, string | undefined>):
     liveMedplum: value.RUN_LIVE_MEDPLUM_TESTS,
     liveDeepgram: value.RUN_LIVE_DEEPGRAM_TESTS,
     liveStedi: value.RUN_LIVE_STEDI_TESTS,
+    enableDemoReset: value.ENABLE_DEMO_RESET,
+    ...(value.DEMO_RESET_TOKEN ? { demoResetToken: value.DEMO_RESET_TOKEN } : {}),
   };
 }

@@ -27,11 +27,13 @@ export type DemoWorkflowSnapshot = {
   exceptions: DemoException[];
   resourceEvidence: DemoResourceEvidence[];
   stopCopy?: string;
+  identityVerified: boolean;
 };
 
 export class DemoWorkflowStore {
   #domain: DemoWorkflowState = createWorkflowState('demo-v1:workflow:maria');
-  #snapshot: DemoWorkflowSnapshot = { phase: 'empty', exceptions: [], resourceEvidence: [] };
+  #snapshot: DemoWorkflowSnapshot = { phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false };
+  #identityVerified = false;
 
   constructor(
     private readonly conversation = new ScriptedConversationAdapter(),
@@ -44,18 +46,21 @@ export class DemoWorkflowStore {
 
   reset(): DemoWorkflowSnapshot {
     this.#domain = createWorkflowState('demo-v1:workflow:maria');
-    this.#snapshot = { phase: 'empty', exceptions: [], resourceEvidence: [] };
+    this.#identityVerified = false;
+    this.#snapshot = { phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false };
     return this.snapshot();
   }
 
   async submitRequest(message: string): Promise<DemoWorkflowSnapshot> {
     if (this.#snapshot.phase === 'stopped') return this.snapshot();
+    if (!this.#identityVerified) throw new Error('Identity verification is required before scheduling');
     const decision = await this.conversation.evaluate(message, { workflowRunId: this.#domain.workflowRunId });
     if (decision.action === 'stop') {
       this.#domain = reduceWorkflow(this.#domain, { type: 'stopped', category: decision.category });
       this.#snapshot = {
         phase: 'stopped',
         resourceEvidence: [],
+        identityVerified: this.#identityVerified,
         stopCopy: decision.safeCopy,
         exceptions: [{
           id: decision.exceptionCommand.commandId,
@@ -68,14 +73,6 @@ export class DemoWorkflowStore {
     }
 
     if (this.#snapshot.phase !== 'empty') return this.snapshot();
-    const identity = decideDemoIdentity({
-      kind: 'identity-submission',
-      givenName: DEMO_V1.patient.givenName,
-      familyName: DEMO_V1.patient.familyName,
-      birthDate: DEMO_V1.patient.birthDate,
-      postalCode: DEMO_V1.patient.postalCode,
-    }, []);
-    if (identity.outcome === 'uncertain') return this.#stopForIdentity();
     this.#domain = reduceWorkflow(this.#domain, { type: 'identity-verified' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'appointment-booked' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'intake-saved', complete: false });
@@ -84,7 +81,17 @@ export class DemoWorkflowStore {
       exceptions: [],
       visit: this.#visit('needs-attention'),
       resourceEvidence: this.#initialEvidence(),
+      identityVerified: true,
     };
+    return this.snapshot();
+  }
+
+  submitIdentity(input: { givenName: string; familyName: string; birthDate: string; postalCode: string }): DemoWorkflowSnapshot {
+    if (this.#snapshot.phase !== 'empty') return this.snapshot();
+    const identity = decideDemoIdentity({ kind: 'identity-submission', ...input }, []);
+    if (identity.outcome === 'uncertain') return this.#stopForIdentity();
+    this.#identityVerified = true;
+    this.#snapshot = { ...this.#snapshot, identityVerified: true };
     return this.snapshot();
   }
 
@@ -113,6 +120,7 @@ export class DemoWorkflowStore {
     this.#snapshot = {
       phase: 'ready',
       exceptions: [],
+      identityVerified: true,
       visit: this.#visit('ready'),
       resourceEvidence: [
         ...this.#initialEvidence(),
@@ -151,6 +159,7 @@ export class DemoWorkflowStore {
         status: 'requested',
         ownerReference: DEMO_V1.practitionerRoleReference,
       }],
+      identityVerified: false,
     };
     return this.snapshot();
   }

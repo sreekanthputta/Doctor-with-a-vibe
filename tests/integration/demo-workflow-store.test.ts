@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DemoWorkflowStore } from '../../src/server/demo-workflow-store';
 
+function verifyMaria(store: DemoWorkflowStore): void {
+  store.submitIdentity({ givenName: 'Maria', familyName: 'Lopez', birthDate: '1974-02-14', postalCode: '60601' });
+}
+
 describe('DemoWorkflowStore vertical slice', () => {
   it('moves one validated request from empty to Needs attention to Ready', async () => {
     const store = new DemoWorkflowStore();
     expect(store.snapshot().phase).toBe('empty');
+    verifyMaria(store);
 
     await store.submitRequest('I need an annual wellness visit in the morning');
     const needsAttention = store.snapshot();
@@ -21,6 +26,7 @@ describe('DemoWorkflowStore vertical slice', () => {
 
   it('fails closed on mixed clinical input with one exception and no appointment', async () => {
     const store = new DemoWorkflowStore();
+    verifyMaria(store);
     await store.submitRequest('I have chest pain and need an annual wellness visit');
     const stopped = store.snapshot();
     expect(stopped.phase).toBe('stopped');
@@ -32,6 +38,7 @@ describe('DemoWorkflowStore vertical slice', () => {
 
   it('preserves an unmatched administrative category and neutral stop copy', async () => {
     const store = new DemoWorkflowStore();
+    verifyMaria(store);
     await store.submitRequest('I need an annual welness vist');
     const stopped = store.snapshot();
     expect(stopped.exceptions[0]?.category).toBe('administrative-unmatched');
@@ -41,6 +48,7 @@ describe('DemoWorkflowStore vertical slice', () => {
 
   it('cannot become Ready with a wrong or missing member ID', async () => {
     const store = new DemoWorkflowStore();
+    verifyMaria(store);
     await store.submitRequest('I need an annual wellness visit');
     await expect(store.submitMemberId('wrong')).rejects.toThrow(/member ID/i);
     expect(store.snapshot().phase).toBe('needs-attention');

@@ -34,4 +34,11 @@ describe('SessionStore', () => {
     expect(store.acceptVoiceEvent(session.sessionId, voice.capabilityId)).toBe(false);
     expect(store.get(session.sessionId)?.role).toBe('patient-demo');
   });
+
+  it('caps cookie-less session allocation', () => {
+    const store = new SessionStore(() => now, 60_000, 2);
+    store.issue('public', 'anonymous');
+    store.issue('public', 'anonymous');
+    expect(() => store.issue('public', 'anonymous')).toThrow(/capacity/i);
+  });
 });

@@ -21,4 +21,10 @@ describe('server environment boundary', () => {
     expect(() => parseServerEnv({ VITE_DEEPGRAM_API_KEY: 'not-allowed' })).toThrow(/browser/i);
     expect(() => parseServerEnv({ VITE_MEDPLUM_CLIENT_SECRET: 'not-allowed' })).toThrow(/browser/i);
   });
+
+  it('fails closed for reset by default and forbids production reset', () => {
+    expect(parseServerEnv({})).toMatchObject({ nodeEnv: 'production', enableDemoReset: false });
+    expect(() => parseServerEnv({ NODE_ENV: 'production', ENABLE_DEMO_RESET: 'true', DEMO_RESET_TOKEN: 'long-enough-reset-token' })).toThrow(/production/i);
+    expect(() => parseServerEnv({ NODE_ENV: 'test', ENABLE_DEMO_RESET: 'true' })).toThrow(/DEMO_RESET_TOKEN/i);
+  });
 });

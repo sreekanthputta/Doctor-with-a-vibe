@@ -15,9 +15,12 @@ export class SessionStore {
   constructor(
     private readonly now: () => Date = () => new Date(),
     private readonly ttlMs = 30 * 60 * 1000,
+    private readonly maxSessions = 1_000,
   ) {}
 
   issue(role: Role, persona: Persona): SessionContext {
+    this.#sweepExpired();
+    if (this.#sessions.size >= this.maxSessions) throw new Error('Session capacity reached');
     const session: StoredSession = {
       sessionId: randomUUID(),
       role,
@@ -78,6 +81,13 @@ export class SessionStore {
       return undefined;
     }
     return session;
+  }
+
+  #sweepExpired(): void {
+    const now = this.now().getTime();
+    for (const [sessionId, session] of this.#sessions) {
+      if (Date.parse(session.expiresAt) <= now) this.#sessions.delete(sessionId);
+    }
   }
 
   #requireActive(sessionId: string): StoredSession {

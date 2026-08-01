@@ -9,7 +9,7 @@ test.describe('VibeDoc four-shell demo', () => {
     await page.goto('/');
     await expect(page.getByText(/synthetic data/i)).toBeVisible();
     await expect(page.getByRole('heading', { name: /One request\. One ready visit/i })).toBeVisible();
-    await expect(page.getByRole('textbox', { name: /message/i })).toBeVisible();
+    await expect(page.getByLabel(/first name/i)).toBeVisible();
   });
 
   test('demo selector never presents itself as authentication', async ({ page }) => {
@@ -27,6 +27,12 @@ test.describe('VibeDoc four-shell demo', () => {
     const physician = await physicianContext.newPage();
 
     await publicPage.goto('/');
+    await publicPage.getByLabel(/first name/i).fill('Maria');
+    await publicPage.getByLabel(/last name/i).fill('Lopez');
+    await publicPage.getByLabel(/date of birth/i).fill('1974-02-14');
+    await publicPage.getByLabel(/postal code/i).fill('60601');
+    await publicPage.getByRole('button', { name: 'Continue' }).click();
+    await expect(publicPage.getByRole('textbox', { name: /message/i })).toBeVisible();
     await publicPage.getByRole('textbox', { name: /message/i }).fill('I need an annual wellness visit in the morning');
     await publicPage.getByRole('button', { name: /send request/i }).click();
     await expect(publicPage.getByRole('status')).toHaveText(/Book appointment completed/i);
@@ -49,13 +55,28 @@ test.describe('VibeDoc four-shell demo', () => {
     await expect(physician.getByText(/Updated:/i)).toBeVisible();
     await expect(physician.getByRole('status')).toHaveText('Ready');
 
+    const unrelatedPublicContext = await browser.newContext();
+    const unrelatedPublic = await unrelatedPublicContext.newPage();
+    await unrelatedPublic.goto('/');
+    await expect(unrelatedPublic.getByLabel(/first name/i)).toBeVisible();
+    await expect(unrelatedPublic.getByText('Maria Lopez', { exact: true })).toHaveCount(0);
+
+    await publicPage.goto('/physician/inbox');
+    await expect(publicPage.getByText(/Physician access is required/i)).toBeVisible();
+
     await publicContext.close();
+    await unrelatedPublicContext.close();
     await patientContext.close();
     await physicianContext.close();
   });
 
   test('mixed clinical input stops with safety copy and no booking', async ({ page }) => {
     await page.goto('/');
+    await page.getByLabel(/first name/i).fill('Maria');
+    await page.getByLabel(/last name/i).fill('Lopez');
+    await page.getByLabel(/date of birth/i).fill('1974-02-14');
+    await page.getByLabel(/postal code/i).fill('60601');
+    await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('textbox', { name: /message/i }).fill('I have chest pain and need an annual wellness visit');
     await page.getByRole('button', { name: /send request/i }).click();
     await expect(page.getByText(/VibeDoc cannot assess symptoms or emergencies/i)).toBeVisible();
