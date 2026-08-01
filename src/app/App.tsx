@@ -62,7 +62,6 @@ export function App(): React.JSX.Element {
       ...physicianVisits[0],
       ...snapshot.visit,
       sourceLabel: 'Medplum · deterministic fixture',
-      resources: snapshot.resourceEvidence.map((item) => item.resourceType),
     }] : [];
     const exceptions: ExceptionVM[] = (snapshot?.exceptions ?? []).map((exception) => ({
       id: exception.id,
