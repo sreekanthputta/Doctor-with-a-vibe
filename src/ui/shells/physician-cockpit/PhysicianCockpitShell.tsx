@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExceptionInbox } from '../../components/ExceptionInbox';
+import { EvidenceInspector } from '../../components/EvidenceInspector';
 import { ReadyVisitRail } from '../../components/ReadyVisitRail';
 import { ShellFrame } from '../../components/ShellFrame';
 import { SurfaceStatePanel } from '../../components/SurfaceStatePanel';
@@ -22,24 +23,13 @@ export function PhysicianCockpitShell({
 }: PhysicianCockpitShellProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExceptions, setShowExceptions] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const cockpitRef = useRef<HTMLDivElement>(null);
 
   const handleShortcut = useCallback((event: KeyboardEvent) => {
-    if (showCommandPalette) {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        cockpitRef.current?.focus();
-        setShowCommandPalette(false);
-      }
-      return;
-    }
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault();
-      setShowCommandPalette(true);
-    } else if (event.key.toLowerCase() === 'j') {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.toLowerCase() === 'j') {
       event.preventDefault();
       setSelectedIndex((current) => Math.min(current + 1, visits.length - 1));
     } else if (event.key.toLowerCase() === 'k') {
@@ -53,7 +43,7 @@ export function PhysicianCockpitShell({
       const selected = visits[selectedIndex];
       if (selected) onOpenVisit(selected.appointmentBusinessId);
     }
-  }, [onOpenVisit, selectedIndex, showCommandPalette, visits]);
+  }, [onOpenVisit, selectedIndex, visits]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleShortcut);
@@ -127,36 +117,14 @@ export function PhysicianCockpitShell({
           </button>
         </section>
 
-        <aside className="vd-cockpit__evidence" aria-labelledby="evidence-title">
+        <aside className="vd-cockpit__evidence" aria-label="Physician evidence and exceptions">
           {showExceptions ? (
             <ExceptionInbox exceptions={exceptions} onAcknowledge={onAcknowledgeException} />
           ) : (
-            <>
-              <h2 id="evidence-title">Evidence inspector</h2>
-              <p>Source: {selectedVisit.sourceLabel}</p>
-              <p>Updated: {selectedVisit.sourceUpdatedAt}</p>
-              <p>Provenance: {selectedVisit.provenanceState}</p>
-              <h3>Medplum resource types</h3>
-              <ul>
-                {selectedVisit.resources.map((resource) => <li key={resource}>{resource}</li>)}
-              </ul>
-            </>
+            <EvidenceInspector visit={selectedVisit} />
           )}
         </aside>
       </div>
-      {showCommandPalette ? (
-        <section
-          className="vd-command-palette"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="command-palette-title"
-        >
-          <h2 id="command-palette-title">Command palette</h2>
-          <label htmlFor="physician-command">Find a visit or workspace action</label>
-          <input id="physician-command" autoFocus />
-          <p>Press Escape to close and return to the cockpit.</p>
-        </section>
-      ) : null}
     </ShellFrame>
   );
 }

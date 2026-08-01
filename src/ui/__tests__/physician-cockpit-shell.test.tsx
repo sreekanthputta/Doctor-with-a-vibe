@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PhysicianCockpitShell } from '../shells/physician-cockpit/PhysicianCockpitShell';
@@ -46,7 +46,7 @@ describe('PhysicianCockpitShell', () => {
     expect(screen.getByRole('heading', { name: 'Exceptions' })).toBeInTheDocument();
   });
 
-  it('opens the command palette with Ctrl+K and returns focus on Escape', () => {
+  it('keeps the evidence inspector dominant while the command palette is deferred', () => {
     render(
       <PhysicianCockpitShell
         state="ready"
@@ -56,12 +56,71 @@ describe('PhysicianCockpitShell', () => {
         onAcknowledgeException={vi.fn()}
       />,
     );
-    const workspace = screen.getByRole('application', { name: 'Physician cockpit' });
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
-    expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument();
-    expect(workspace).toHaveFocus();
+    expect(screen.getByRole('heading', { name: 'Medplum workflow evidence' })).toBeInTheDocument();
+  });
+
+  it('shows allowlisted versioned workflow evidence instead of resource-type strings', () => {
+    render(
+      <PhysicianCockpitShell
+        state="ready"
+        visits={physicianVisits}
+        exceptions={[]}
+        onOpenVisit={vi.fn()}
+        onAcknowledgeException={vi.fn()}
+      />,
+    );
+
+    const evidence = screen.getByRole('region', { name: 'Medplum workflow evidence' });
+    expect(within(evidence).getByText('Appointment/appt-maria-wellness')).toBeInTheDocument();
+    expect(within(evidence).getByText('demo-v1:appointment:maria-wellness')).toBeInTheDocument();
+    expect(within(evidence).getAllByText('Version 1').length).toBeGreaterThan(0);
+    expect(within(evidence).getByText('Booking record')).toBeInTheDocument();
+    expect(within(evidence).getByText('Created from the selected 10:30 slot for this workflow.')).toBeInTheDocument();
+    expect(within(evidence).queryByRole('heading', { name: 'Medplum resource types' })).not.toBeInTheDocument();
+  });
+
+  it('makes the resolved Task and eligibility evidence chain explicit', () => {
+    render(
+      <PhysicianCockpitShell
+        state="ready"
+        visits={physicianVisits}
+        exceptions={[]}
+        onOpenVisit={vi.fn()}
+        onAcknowledgeException={vi.fn()}
+      />,
+    );
+
+    const taskHistory = screen.getByRole('region', { name: 'Resolved Task history' });
+    expect(within(taskHistory).getByText('Completed')).toBeInTheDocument();
+    expect(within(taskHistory).getByText('Task/task-member-id')).toBeInTheDocument();
+    expect(within(taskHistory).getByText(/member ID supplied/i)).toBeInTheDocument();
+
+    const linkage = screen.getByRole('region', { name: 'Eligibility evidence linkage' });
+    expect(within(linkage).getByText('CoverageEligibilityRequest/eligibility-request-maria')).toBeInTheDocument();
+    expect(within(linkage).getByText('CoverageEligibilityResponse/eligibility-response-maria')).toBeInTheDocument();
+    expect(within(linkage).getByText('Coverage/coverage-maria')).toBeInTheDocument();
+    expect(within(linkage).getByText('Request → Response → Coverage')).toBeInTheDocument();
+    expect(within(linkage).getByText('Completed · fixture')).toBeInTheDocument();
+  });
+
+  it('labels sanitized security evidence separately from FHIR Provenance', () => {
+    render(
+      <PhysicianCockpitShell
+        state="ready"
+        visits={physicianVisits}
+        exceptions={[]}
+        onOpenVisit={vi.fn()}
+        onAcknowledgeException={vi.fn()}
+      />,
+    );
+
+    const securityEvent = screen.getByRole('region', { name: 'Sanitized application security event' });
+    expect(within(securityEvent).getByText('Allowed')).toBeInTheDocument();
+    expect(within(securityEvent).getByText('physician-demo')).toBeInTheDocument();
+    expect(within(securityEvent).getByText('Synthetic fixture')).toBeInTheDocument();
+    expect(within(securityEvent).getByText('Not FHIR Provenance or a Medplum access audit.')).toBeInTheDocument();
   });
 
   it('renders loading, empty, error, and forbidden states without stale visit data', () => {

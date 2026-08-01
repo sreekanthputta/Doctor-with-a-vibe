@@ -48,22 +48,6 @@
   padding: var(--space-4);
 }
 
-.vd-command-palette {
-  position: fixed;
-  inset: 12vh auto auto 50%;
-  width: min(34rem, calc(100% - 2rem));
-  transform: translateX(-50%);
-  border: 2px solid currentColor;
-  border-radius: var(--radius-panel);
-  padding: var(--space-4);
-}
-
-.vd-command-palette label,
-.vd-command-palette input {
-  display: block;
-  width: 100%;
-}
-
 .vd-composer,
 .vd-composer label,
 .vd-patient-grid form,
@@ -149,8 +133,45 @@
 
 .vd-trace__field dd,
 .vd-exception dd,
-.vd-panel dd {
+.vd-panel dd,
+.vd-evidence-resource dd,
+.vd-evidence-card dd {
   margin: 0;
+}
+
+.vd-evidence-list,
+.vd-evidence-linkage {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.vd-evidence-resource,
+.vd-evidence-card {
+  border-top: 1px solid currentColor;
+  padding-block: var(--space-3);
+}
+
+.vd-evidence-resource__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.vd-evidence-resource dl > div,
+.vd-evidence-card dl > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) 2fr;
+  gap: var(--space-2);
+}
+
+.vd-evidence-resource code,
+.vd-evidence-card code {
+  overflow-wrap: anywhere;
+}
+
+.vd-security-event {
+  border-style: dashed;
 }
 
 .vd-visually-hidden {
