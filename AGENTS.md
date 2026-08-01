@@ -6,7 +6,7 @@ Build **OnePractice**, a FHIR-native operations layer that lets an independent p
 
 The vision is a front office in software; humans still provide physical care, clinical judgment, legal accountability, and exception handling. Never market or implement autonomous medical practice.
 
-Read `HACKATHON.md`, `RESEARCH.md`, and `UI.md` before planning or editing.
+Read `HACKATHON.md`, `RESEARCH.md`, `UI.md`, and `DEEPGRAM.md` before planning or editing.
 
 ## Product invariant
 
@@ -36,9 +36,11 @@ Do not add live clinical decision support, encounter transcription, referrals, b
 - Runtime validation, such as Zod, at every agent/provider boundary.
 - One centralized FHIR mutation service with an allowlist per workflow.
 - Synthetic data and replayable fixtures only.
-- Deepgram Flux for a future conversational phone agent; Nova streaming/batch with diarization for a future consented encounter transcript. Do not mix those paths or assume Flux performs entity-level PHI redaction.
+- Deepgram Voice Agent for the front-desk voice/chat session, using audio or `InjectUserMessage` through the same tool dispatcher; Nova-3 Medical streaming/batch with diarization for a future consented encounter transcript. Do not mix those paths or assume the conversational path performs entity-level PHI redaction.
 
 Do not add a second database, language, message broker, or orchestration framework without a demonstrated blocker. Temporary conversation state may live in memory; durable operational state belongs in Medplum.
+
+Deepgram function selection is untrusted model output. A `FunctionCallRequest` must cross the same schema, authorization, confirmation, idempotency, and mutation gates as any other command. Voice confirmation alone is not a clinical signature. Never expose permanent Deepgram, Stedi, telephony, messaging, or organization-wide Medplum credentials in browser code.
 
 ## FHIR model
 

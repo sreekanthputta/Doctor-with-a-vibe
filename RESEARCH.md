@@ -71,7 +71,7 @@ The internal reviewers rejected the full clinic vision as a one-day build. The s
 | OnePractice | policy, workflow state machine, approvals, idempotency, exceptions, UI | workflow decisions made under published rules | clinical facts or payer responses | core product |
 | Medplum | FHIR clinical and operational record | patients, appointments, forms, chart, orders, tasks, committed claim representation | live payer processing state | only required live dependency |
 | Stedi | payer/clearinghouse transactions | response returned by a payer/clearinghouse at a timestamp | coverage guarantee, coding, medical necessity, fee schedules | labeled eligibility test fixture/API |
-| Deepgram | speech-to-text and text-to-speech transport | finalized transcript output from the selected model | identity, intent, triage, clinical reasoning | prerecorded/browser voice enhancement |
+| Deepgram | Voice Agent transport/LLM/function selection plus medical transcription | agent events and finalized transcript output from the selected model | identity, workflow authority, authorization, triage, or clinical judgment | shared voice/chat ready-visit interface; prerecorded fallback |
 | Moss | low-latency semantic search index | no source-of-truth data | permissions, active medications/allergies, availability, balances, eligibility or claim status | non-PHI clinic knowledge only; otherwise defer |
 
 Stedi's current published catalog supports eligibility and benefits, insurance discovery, coordination of benefits, professional/institutional/dental claims, claim attachments, 277CA acknowledgments, 276/277 claim-status checks, and 835 remittance responses. However, test API keys currently support approved real-time eligibility fixtures; production payer transactions require a production account, appropriate BAA/account controls, enrollment where applicable, and operational reconciliation. Claims are roadmap, not part of the judged demo.
@@ -103,7 +103,7 @@ Use two separate Deepgram paths:
 
 | Use | Recommended path | Important constraint |
 | --- | --- | --- |
-| Front-desk voice agent | Flux `/v2/listen` for turn-taking | Flux entity PHI redaction must not be assumed |
+| Front-desk voice/chat agent | Deepgram Voice Agent; audio or `InjectUserMessage` through one session | its function requests remain untrusted and require the OnePractice policy dispatcher |
 | Doctor-patient encounter | Nova streaming/batch with diarization, utterances, keyterms | interim text is display-only; finalized transcript remains a source, not a chart fact |
 
 Audio must go through an authenticated server-side gateway. Never expose the provider key in the browser. Use only synthetic audio for the hackathon, make recording state visible, do not persist raw audio by default, and keep logs free of transcript payloads.

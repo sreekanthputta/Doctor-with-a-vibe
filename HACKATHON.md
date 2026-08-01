@@ -187,13 +187,13 @@ A referral begins as a proposal. After physician approval, create a `ServiceRequ
 ## Provider boundaries
 
 - **Medplum:** only required live dependency; system of record and workflow backbone.
-- **Deepgram Flux:** future front-desk conversational turn-taking.
+- **Deepgram Voice Agent:** shared front-desk voice and typed-chat session; typed turns use `InjectUserMessage` and both modes share the same narrow tool dispatcher.
 - **Deepgram Nova streaming/batch:** future encounter transcription with diarization and finalized segments.
 - **Stedi:** optional test eligibility adapter; show only returned fields.
 - **Moss:** optional derived semantic index for approved clinic knowledge and synthetic demo documents; every patient-specific hit must be permission-filtered, re-fetched from Medplum, and version-checked.
 - **Messaging/PSTN/model:** fixture-first, disabled without breaking the demo.
 
-Provider secrets remain server-side. Never send real PHI during the hackathon. Deepgram entity-level PHI redaction must not be assumed for Flux.
+Provider secrets remain server-side. Browser voice requires a short-lived token from a minimal backend; permanent Deepgram or Stedi keys never enter client JavaScript. Never send real PHI during the hackathon. Deepgram entity-level PHI redaction must not be assumed for the conversational path.
 
 ## MVP acceptance criteria
 
