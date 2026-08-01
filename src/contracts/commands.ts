@@ -12,6 +12,7 @@ export const DomainCommandSchema = z.object({
     'update-coverage-member-id',
     'run-eligibility',
     'complete-task',
+    'create-exception',
     'create-identity-exception',
   ]),
   payload: z.record(z.string(), z.unknown()),

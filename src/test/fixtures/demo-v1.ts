@@ -3,6 +3,8 @@ export const DEMO_V1 = Object.freeze({
   timezone: 'America/Chicago',
   identifierSystem: 'urn:vibedoc:demo',
   identifierPrefix: 'demo-v1:',
+  patientBusinessId: 'demo-v1:patient:maria',
+  practitionerRoleReference: 'PractitionerRole/maya-role',
   physician: { display: 'Dr. Maya Chen', persona: 'maya-demo' },
   patient: {
     persona: 'maria-demo',

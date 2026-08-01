@@ -10,6 +10,8 @@ describe('DEMO_V1', () => {
 
   it('contains synthetic fixture values only', () => {
     expect(DEMO_V1.identifierSystem).toBe('urn:vibedoc:demo');
+    expect(DEMO_V1.patientBusinessId).toBe('demo-v1:patient:maria');
+    expect(DEMO_V1.practitionerRoleReference).toBe('PractitionerRole/maya-role');
     expect(DEMO_V1.patient.persona).toBe('maria-demo');
   });
 });
