@@ -28,7 +28,7 @@ live typed text ──┘        STT -> Think/LLM -> Speak
                       FunctionCallRequest[]
                                  |
                                  v
-                    OnePractice tool dispatcher
+                    VibeDoc tool dispatcher
                       |          |          |
                       v          v          v
                     UI/read    Medplum    secure gateway
@@ -47,7 +47,9 @@ typed fallback -> ScriptedConversationAdapter -> AdministrativeIntent
                          same policy/tool dispatcher
 ```
 
-Deepgram chooses whether to request a declared function; OnePractice executes it. Deepgram never receives arbitrary Medplum or Stedi credentials and never becomes the workflow authority.
+Deepgram chooses whether to request a declared function; VibeDoc executes it. Deepgram never receives arbitrary Medplum or Stedi credentials and never becomes the workflow authority.
+
+Every function request and response also emits a sanitized application trace event. The request opens one row; progress and `FunctionCallResponse` update that same row by application `traceId` and provider function ID. Provider IDs are correlation data only, never authorization or idempotency. The trace projection is produced after runtime validation and field allowlisting; raw arguments, hidden prompts, `thought_signature`, provider frames, and unrestricted FHIR responses are never rendered. See `TRACING.md`.
 
 ## Typed chat
 
@@ -282,7 +284,7 @@ Deepgram is an optional live enhancement for voice and chat in the ready-visit f
 1. Browser obtains a short-lived token.
 2. Voice or `InjectUserMessage` starts the same administrative session when connected.
 3. Deepgram requests only allowlisted ready-visit functions.
-4. OnePractice validates and executes them through deterministic adapters.
+4. VibeDoc validates and executes them through deterministic adapters.
 5. Medplum remains the only required live backend dependency.
 6. Stedi uses a labeled eligibility fixture/test request.
 7. If Deepgram is unavailable, typed input immediately uses the deterministic adapter and the same policy dispatcher.

@@ -1,12 +1,12 @@
-# OnePractice Research and Product Decision
+# VibeDoc Research and Product Decision
 
 Research checked August 1, 2026.
 
-> **Document role:** supporting research, not the normative specification. Resolve conflicts in this order: `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → this file.
+> **Document role:** supporting research, not the normative specification. Resolve conflicts in this order: `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`TRACING.md`/`DEEPGRAM.md` → `DEPLOYMENT.md` → `BUILD_PLAN.md` → this file.
 
 ## Executive decision
 
-The strongest product direction is an **AI operations layer for a virtual-first adult primary-care microclinic**, with Medplum as the source of truth and a Cursor-like physician cockpit. OnePractice is the platform; OneCare Clinic is the fictional practice operated by one family physician without dedicated administrative staff.
+The strongest product direction is **VibeDoc — Powered by Medplum**, an AI operations layer and fictional virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff, with Medplum as the source of truth and a Cursor-like physician cockpit.
 
 The credible promise is not “replace every hospital employee.” It is:
 
@@ -46,7 +46,7 @@ The practical target is not zero humans. It is a radically lean team where human
 
 | Project | Demo | Strength | Main weakness | Verdict |
 | --- | --- | --- | --- | --- |
-| **OnePractice Ready Visit** | call/web request → appointment → intake → missing-field follow-up → physician inbox | clearest end-to-end story; deep Medplum fit; safe and measurable | scheduling beta and identity edge cases | **Build this** |
+| **VibeDoc Ready Visit** | call/web request → appointment → intake → missing-field follow-up → physician inbox | clearest end-to-end story; deep Medplum fit; safe and measurable | scheduling beta and identity edge cases | **Build this** |
 | Closed-Loop Referral Front Desk | referral arrives → packet completion → patient booking → receipt tracking | strong specialist-practice pain; great FHIR graph | external transmission and clinical urgency add risk | best second workflow |
 | Result Rescue | result enters queue → patient contact → acknowledged follow-up | patient-safety narrative and clear closure | clinical escalation is hard; weaker sponsor fit | strong safety-track alternative |
 | AuthReady | existing order → eligibility/evidence packet → administrative task | payer ROI and natural Stedi fit | policy/authorization claims are easy to overstate | good back-office expansion |
@@ -56,7 +56,7 @@ The practical target is not zero humans. It is a radically lean team where human
 
 ## Winning demo rationale
 
-OnePractice Ready Visit wins the internal review because it provides:
+VibeDoc Ready Visit wins the internal review because it provides:
 
 - one human-readable outcome: the visit is operationally ready;
 - Medplum depth across scheduling, patient, coverage, questionnaire, task, communication, and provenance;
@@ -72,7 +72,7 @@ The internal reviewers rejected the full clinic vision as a one-day build. The s
 
 | Layer | Role | Authoritative for | Not authoritative for | Hackathon use |
 | --- | --- | --- | --- | --- |
-| OnePractice | policy, workflow state machine, approvals, idempotency, exceptions, UI | workflow decisions made under published rules | clinical facts or payer responses | core product |
+| VibeDoc | policy, workflow state machine, approvals, idempotency, exceptions, UI | workflow decisions made under published rules | clinical facts or payer responses | core product |
 | Medplum | FHIR clinical and operational record | patients, appointments, forms, chart, orders, tasks, committed claim representation | live payer processing state | only required live dependency |
 | Stedi | payer/clearinghouse transactions | response returned by a payer/clearinghouse at a timestamp | coverage guarantee, coding, medical necessity, fee schedules | labeled eligibility test fixture/API |
 | Deepgram | conversational speech, Think/LLM output, function proposals, and transcription | provider events and finalized transcript output from the selected model | identity, workflow authority, authorization, triage, or clinical judgment | optional shared live voice/chat interface; deterministic typed fallback bypasses it |
@@ -118,7 +118,7 @@ Use two separate Deepgram paths:
 
 | Use | Recommended path | Important constraint |
 | --- | --- | --- |
-| Front-desk voice/chat agent | Deepgram Voice Agent; audio or `InjectUserMessage` through one session | its function requests remain untrusted and require the OnePractice policy dispatcher |
+| Front-desk voice/chat agent | Deepgram Voice Agent; audio or `InjectUserMessage` through one session | its function requests remain untrusted and require the VibeDoc policy dispatcher |
 | Doctor-patient encounter | Nova streaming/batch with diarization, utterances, keyterms | interim text is display-only; finalized transcript remains a source, not a chart fact |
 
 The browser may connect to Deepgram with a narrowly scoped short-lived token issued by an authenticated server-side endpoint; the permanent provider key must never enter browser code. Use only synthetic audio for the hackathon, make recording state visible, do not persist raw audio by default, and keep logs free of transcript payloads. The deterministic typed path bypasses Deepgram entirely but emits the same validated intent schema.
@@ -216,6 +216,12 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 4. Is the preferred pitch a narrow deployed workflow or a broader platform with one reliable vertical slice?
 
 ## Primary sources
+
+- [Railway React deployment guide](https://docs.railway.com/guides/react)
+- [Railway configuration as code](https://docs.railway.com/config-as-code)
+- [Railway healthchecks](https://docs.railway.com/deployments/healthchecks)
+- [Railway variables](https://docs.railway.com/variables)
+- [Railway build and start commands](https://docs.railway.com/builds/build-and-start-commands)
 
 - [YC x Medplum Hackathon](https://events.ycombinator.com/medplum-hackathon-26)
 - [Medplum scheduling](https://www.medplum.com/docs/scheduling)

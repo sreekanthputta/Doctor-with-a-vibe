@@ -1,11 +1,11 @@
-# OneCare Clinic Product Frame
+# VibeDoc Clinic Product Frame
 
 > Normative priority: subordinate to `AGENTS.md` and the `HACKATHON.md` release contract. This file defines the fictional customer, long-term product story, and roadmap scenario; it does not expand the judged demo.
 
 ## Product and customer
 
-- **OnePractice** is the software platform.
-- **OneCare Clinic** is the fictional customer and demo practice.
+- **VibeDoc** is the visible software and fictional clinic brand.
+- **Powered by Medplum** is the required product endorsement.
 - **Dr. Maya Chen** is a fictional board-certified family physician.
 - **Maria Lopez**, age 52, is the single fictional adult patient used across the administrative MVP and later clinical roadmap.
 
@@ -21,7 +21,7 @@ Immediately clarify that this is not a hospital and not a claim that healthcare 
 
 ## Physician and specialty
 
-OneCare serves adults 18 and older. Dr. Chen practices family medicine with a focus on adult preventive care and cardiometabolic health. The product story may cover, within the physician's credentials, jurisdiction, available data, and care setting:
+VibeDoc serves adults 18 and older. Dr. Chen practices family medicine with a focus on adult preventive care and cardiometabolic health. The product story may cover, within the physician's credentials, jurisdiction, available data, and care setting:
 
 - preventive and annual wellness care;
 - hypertension, type 2 diabetes, dyslipidemia, and obesity management;
@@ -36,7 +36,7 @@ This product positioning does not determine the physician's actual scope of prac
 
 ## Operating model
 
-OneCare has one physician and no dedicated receptionist, scheduler, biller, referral coordinator, scribe, or prior-authorization specialist in the fictional target state. OnePractice automates routine administrative work under versioned rules and puts unresolved work into the physician's owned queue.
+VibeDoc has one physician and no dedicated receptionist, scheduler, biller, referral coordinator, scribe, or prior-authorization specialist in the fictional target state. The platform automates routine administrative work under versioned rules and puts unresolved work into the physician's owned queue.
 
 The clinic may offer virtual visits, limited in-person physician visits, annual wellness care, chronic-condition follow-up, medication reviews, preventive screening, and coordination of physician-approved labs, imaging, and referrals. External delivery is always separate from creating a Medplum resource:
 
@@ -54,7 +54,7 @@ No dedicated administrative staff does not mean no exceptions. In the fictional 
 
 ## Explicit exclusions
 
-OneCare does not present itself as a hospital and does not provide or automate:
+VibeDoc does not present itself as a hospital and does not provide or automate:
 
 - emergency or inpatient care;
 - surgery, procedural sedation, critical care, obstetric delivery, chemotherapy, or infusion;
@@ -93,7 +93,7 @@ A future scenario can demonstrate:
 1. Explicitly start and consent to a synthetic encounter recording.
 2. Deepgram produces a finalized source transcript; it does not create chart facts.
 3. The physician asks why a prior medication was stopped.
-4. OnePractice searches exact scoped Medplum records and re-fetches the cited current resource/version. Moss is not required for patient-note retrieval.
+4. VibeDoc searches exact scoped Medplum records and re-fetches the cited current resource/version. Moss is not required for patient-note retrieval.
 5. For a candidate medication question, RxNorm normalizes identity, Medplum supplies exact patient facts, validated medication sources run deterministic checks, and optional Moss retrieves only public versioned DailyMed passages.
 6. The UI shows facts used, missing/stale data, checks performed/unavailable, and citations. It does not answer “safe” or recommend treatment.
 7. The physician may prepare separate note, medication, lab, referral, follow-up, and instruction proposals.
@@ -111,7 +111,7 @@ The prior-medication and candidate-alternative examples are synthetic workflow d
 
 | Layer | Role | Boundary |
 | --- | --- | --- |
-| OnePractice | policy, workflow, exception routing, UI | never substitutes for clinician judgment |
+| VibeDoc | policy, workflow, exception routing, UI | never substitutes for clinician judgment |
 | Medplum | clinical/workflow source of truth and exact patient retrieval | creating a resource is not external fulfillment |
 | Deepgram | optional conversational speech and future transcription | deterministic typed fallback remains; outputs are untrusted |
 | Stedi | eligibility and future payer transactions | no guarantee of coverage, network, authorization, price, or payment |
@@ -119,7 +119,7 @@ The prior-medication and candidate-alternative examples are synthetic workflow d
 
 ## Pitch
 
-> OnePractice powers OneCare, an AI-native adult primary-care microclinic operated by one family physician. The platform completes routine access, intake, coverage, coordination, documentation, and payment workflows; the physician performs clinical judgment and signs consequential actions; external partners deliver physical and specialty services.
+> VibeDoc — Powered by Medplum is an AI-native adult primary-care microclinic operated by one family physician. The platform completes routine access, intake, coverage, coordination, documentation, and payment workflows; the physician performs clinical judgment and signs consequential actions; external partners deliver physical and specialty services.
 
 For the hackathon, finish the sentence with the proof rather than the roadmap:
 

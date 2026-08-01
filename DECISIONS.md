@@ -1,4 +1,4 @@
-# OnePractice Architecture Decisions
+# VibeDoc Architecture Decisions
 
 > Normative priority: records accepted decisions; `AGENTS.md` and `HACKATHON.md` still govern.
 
@@ -19,10 +19,10 @@ Decision: live voice and live typed agent chat may share one role-specific Deepg
 
 Supersedes: the claim that all typed chat must use the live Deepgram WebSocket.
 
-## D-004 — Deepgram proposes; OnePractice authorizes
+## D-004 — Deepgram proposes; VibeDoc authorizes
 
 Status: accepted
-Decision: Deepgram provides speech, Think/LLM output, and function proposals. Its output, IDs, `client_side` flag, and history do not confer authority. OnePractice owns identity, role/tool allowlists, policy, state transitions, confirmation, idempotency, and mutations.
+Decision: Deepgram provides speech, Think/LLM output, and function proposals. Its output, IDs, `client_side` flag, and history do not confer authority. VibeDoc owns identity, role/tool allowlists, policy, state transitions, confirmation, idempotency, and mutations.
 
 ## D-005 — Ready means no required open exception
 
@@ -66,4 +66,19 @@ Decision: use exact, authorization-scoped Medplum queries for all patient and wo
 ## D-012 — Platform, microclinic, specialty, and persona
 
 Status: accepted
-Decision: OnePractice is the platform; OneCare Clinic is the fictional virtual-first adult primary-care microclinic; Dr. Maya Chen is its fictional family physician; Maria Lopez is the single synthetic patient. The product is not a hospital. The hackathon shows Maria's administrative annual-wellness readiness flow; her cardiometabolic/medication scenario is governed roadmap only.
+Decision: VibeDoc is both the visible product and fictional virtual-first adult primary-care microclinic brand, always endorsed as `Powered by Medplum`; Dr. Maya Chen is its fictional family physician; Maria Lopez is the single synthetic patient. The product is not a hospital. The hackathon shows Maria's administrative annual-wellness readiness flow; her cardiometabolic/medication scenario is governed roadmap only.
+
+## D-013 — Railway is the sole deployment target
+
+Status: accepted
+Decision: deploy one long-running Railway service containing the React SPA, minimal Node gateway, `/health`, and role-bound sanitized trace stream. Use Railway's injected `PORT` and service variables. Do not add a second host, database, volume, worker, or deployment path without a demonstrated blocker; Medplum remains durable state.
+
+## D-014 — Function execution is visible through sanitized live traces
+
+Status: accepted
+Decision: compact function rows appear beneath the initiating assistant message and update in place from queued/running through terminal state. Clicking reveals only tool- and role-specific allowlisted input/output projections. Traces are explanatory UI state, not workflow authority, Provenance, access audit, or chain-of-thought, and never contain secrets, hidden prompts, raw provider payloads, or unrestricted FHIR resources.
+
+## D-015 — Palette awaits visual-direction approval
+
+Status: accepted
+Decision: preserve the patient/physician information architecture and interaction hierarchy, but do not implement the earlier ivory/sage/teal palette. Generate and compare explicit visual directions under `design/variants/`; freeze global color tokens only after user approval or an instructed blend.

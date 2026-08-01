@@ -1,4 +1,4 @@
-# OnePractice — Hackathon Build Brief
+# VibeDoc — Hackathon Build Brief
 
 > Normative priority: subordinate only to `AGENTS.md`; this file is the release and demo contract.
 
@@ -12,7 +12,7 @@ Deadline: 5:00 PM Pacific
 
 ## Decision
 
-Build **OnePractice**, the FHIR-native operations layer for **OneCare Clinic**, a fictional virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. It completes routine front-office workflows and routes only exceptions to Dr. Maya Chen.
+Build **VibeDoc — Powered by Medplum**, a fictional virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. It completes routine front-office workflows and routes only exceptions to Dr. Maya Chen.
 
 Do not pitch “replace everyone in a hospital.” Pitch:
 
@@ -26,7 +26,7 @@ The north star is a Cursor-like cockpit for the entire clinic. The winning one-d
 
 ```text
 Browser voice ----> optional Deepgram Voice Agent --┐
-Typed web --------> live Deepgram or scripted bypass ├─> OnePractice
+Typed web --------> live Deepgram or scripted bypass ├─> VibeDoc
 Future phone/SMS -> PSTN/messaging adapter ----------┘   workflow brain + UX
                  |                 |
                  v                 v
@@ -35,7 +35,9 @@ Future phone/SMS -> PSTN/messaging adapter ----------┘   workflow brain + UX
          source of truth   transaction authority
 ```
 
-OnePractice owns policy, sequencing, authorization, approval, idempotency, and exception routing. No vendor independently decides a clinical or financial action. Medplum remains authoritative for patient/clinical/workflow state and supports exact scoped retrieval. Stedi is authoritative for its current payer transaction and is synchronized into Medplum. Deepgram provides conversational speech, Think/LLM output, and function-call proposals; every output is untrusted and has no workflow authority. Moss is not part of the administrative MVP; a future clinical-support experiment may index only public, versioned medication-label evidence.
+VibeDoc owns policy, sequencing, authorization, approval, idempotency, and exception routing. No vendor independently decides a clinical or financial action. Medplum remains authoritative for patient/clinical/workflow state and supports exact scoped retrieval. Stedi is authoritative for its current payer transaction and is synchronized into Medplum. Deepgram provides conversational speech, Think/LLM output, and function-call proposals; every output is untrusted and has no workflow authority. Moss is not part of the administrative MVP; a future clinical-support experiment may index only public, versioned medication-label evidence.
+
+The demo deploys as one Railway service. Assistant messages show compact function rows whose sanitized inputs, outputs, and status update in real time. This makes sponsor integrations and deterministic fallback visible without exposing secrets, hidden reasoning, raw provider payloads, or unrestricted FHIR content.
 
 The workflow brain is deterministic around the model:
 
@@ -73,7 +75,7 @@ It demonstrates why healthcare benefits from an agent without pretending the mod
 
 Show an empty “Tomorrow” queue.
 
-> “Independent doctors spend their day operating software and chasing paperwork. OnePractice makes the routine work disappear and shows only exceptions.”
+> “Independent doctors spend their day operating software and chasing paperwork. VibeDoc makes the routine work disappear and shows only exceptions.”
 
 ### 0:20–1:10 — Patient front door
 
@@ -89,20 +91,22 @@ The assistant:
 4. Books one appointment through the scheduling adapter.
 5. Captures coverage information and sends a short intake questionnaire.
 
+Immediately after booking, expand exactly one compact `Book appointment` trace row for 5–8 seconds. Show its sanitized input, live/fixture label, completed state, and Medplum `Appointment` reference, then close it. Do not open raw payloads or narrate implementation details.
+
 For reliability, deterministic typed input uses `ScriptedConversationAdapter`. Live browser voice or typed agent-chat can use Deepgram through the same domain intent schema. A real phone number is roadmap, not an optional stage flourish.
 
 ### 1:10–1:45 — Ready-visit loop
 
 The patient enters **Synthetic Demo Access** and opens the fixed fictional persona. A typed demo username is a persona selector, not authentication, and never exposes real data. Production replaces this with a verified one-time link/code, passkey, or equivalent identity proof.
 
-The patient completes intake but has not supplied the synthetic insurance member ID required by the physician-authored demo readiness policy. OnePractice:
+The patient completes intake but has not supplied the synthetic insurance member ID required by the physician-authored demo readiness policy. VibeDoc:
 
 - marks the `QuestionnaireResponse` as patient-reported;
 - delivers a privacy-minimal in-app follow-up message and records the actual event;
 - creates one owned administrative `Task` for the unresolved field;
 - leaves eligibility `not checked` until the required identifier exists.
 
-The patient supplies `AETNA-DEMO-2048`. OnePractice updates `Coverage`, runs the deterministic labeled eligibility fixture (or live approved test adapter), stores the request/response projection, completes the same idempotent Task, and advances `Needs attention -> Ready`. A visit with any required open Task remains Needs attention.
+The patient supplies `AETNA-DEMO-2048`. VibeDoc updates `Coverage`, runs the deterministic labeled eligibility fixture (or live approved test adapter), stores the request/response projection, completes the same idempotent Task, and advances `Needs attention -> Ready`. A visit with any required open Task remains Needs attention.
 
 It never translates eligibility into “covered,” “in network,” “no authorization required,” or a price guarantee.
 
@@ -132,7 +136,7 @@ Dashboard proof: **one routine call resolved, zero staff re-entry, one exception
 
 ## UI contract
 
-The patient surface is warm, mobile-first, and one task at a time. The physician surface uses a dark, calm, Cursor-inspired three-pane layout:
+The patient surface is calm, high-clarity, mobile-first, and one task at a time. The physician surface uses a dark, calm, Cursor-inspired three-pane layout. The final palette is selected from the canonical visual studies before tokens freeze:
 
 | Pane | Contents |
 | --- | --- |
@@ -208,12 +212,13 @@ Provider secrets remain server-side. Browser voice requires a short-lived token 
 - Missing insurance member ID creates exactly one idempotent Task; supplying it updates `Coverage`, records eligibility evidence, and completes that Task before Ready.
 - Missing payer values remain `unknown/not checked`.
 - All external calls have deterministic fixtures.
+- One compact booking trace expands, updates in place, and shows only a role/session/subject-authorized sanitized projection; the Ready path still completes if the live trace stream is unavailable.
 - Reset and rerun produce no duplicate resources.
 - The full story is rehearsed in under three minutes.
 
 ## Build order
 
-1. Scaffold and freeze typed contracts, stable demo identifiers, design tokens, and deterministic fixtures.
+1. Scaffold and freeze typed contracts, stable demo identifiers, route shells, trace schemas, and deterministic fixtures; freeze color tokens only after visual-direction approval.
 2. Seed one physician, service, schedule, patient fixture, questionnaire, and deterministic availability.
 3. Implement the Deepgram-independent typed patient conversation and Medplum appointment/intake graph.
 4. Add incomplete-field detection and the single exception inbox.

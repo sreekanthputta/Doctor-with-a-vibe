@@ -1,4 +1,4 @@
-# OnePractice Multi-Agent Build Plan
+# VibeDoc Multi-Agent Build Plan
 
 > Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, `CLINIC.md`, and `ARCHITECTURE.md`.
 
@@ -20,9 +20,9 @@ Do not copy ECC's large catalog of generic agents/skills, legacy Codex configura
 ## Build DAG
 
 ```text
-[0 scaffold + scripts + env example]
+[0 scaffold + scripts + env example + Railway contract]
                 |
-[1 freeze schemas + fixture + stable IDs + design tokens]
+[1 freeze schemas + fixture + stable IDs + trace contract + approved tokens]
        /              |                  \
 [2 domain/policy] [3 FHIR/data] [4 UI from view-model fixture]
        \              |                  /
@@ -48,10 +48,11 @@ Before parallel writers:
 1. Scaffold one strict-TypeScript React application with minimal server routes.
 2. Add scripts: `dev`, `typecheck`, `lint`, `test`, `build`, `demo:seed`, `demo:reset`, and one critical browser test.
 3. Create `.env.example` with placeholder names and server-only environment validation.
-4. Freeze runtime schemas from `ARCHITECTURE.md`.
-5. Freeze OneCare Clinic, fictional family physician Dr. Maya Chen, adult patient Maria Lopez (`maria-demo`), annual-wellness scenario, missing synthetic insurance member ID, eligibility fixture, stable resource identifiers, and reset manifest.
-6. Freeze design tokens and route shells from `UI.md`.
-7. Freeze the Medplum scheduling seed constraints and eligibility/QuestionnaireResponse mappings from `ARCHITECTURE.md`.
+4. Add one Railway service contract: `npm run build`, `npm run start`, injected `PORT`, `/health`, and graceful `SIGTERM` handling.
+5. Freeze runtime and sanitized function-trace schemas from `ARCHITECTURE.md` and `TRACING.md`.
+6. Freeze VibeDoc, fictional family physician Dr. Maya Chen, adult patient Maria Lopez (`maria-demo`), annual-wellness scenario, missing synthetic insurance member ID, eligibility fixture, stable resource identifiers, and reset manifest.
+7. Freeze route shells from `UI.md`; freeze color tokens only after a generated direction is approved.
+8. Freeze the Medplum scheduling seed constraints and eligibility/QuestionnaireResponse mappings from `ARCHITECTURE.md`.
 
 `demo:seed` and `demo:reset` must target only the namespaced synthetic manifest, require an explicit development/admin context, and never be exposed as public production routes.
 
@@ -118,6 +119,7 @@ Outcome:
 - Synthetic Demo Access banner/persona;
 - Ready Visit Rail including Needs attention;
 - dark physician Tomorrow/Exceptions/evidence cockpit;
+- compact expandable function rows with running/completed/failed fixture states;
 - loading, empty, stopped, stale, retry, live/prerecorded/fixture labels;
 - keyboard and accessibility baseline.
 
@@ -142,6 +144,7 @@ Outcome:
 - typed deterministic conversation adapter;
 - provider interfaces/fixtures;
 - server token/tool boundary;
+- Railway start/health/shutdown contract and sanitized local/SSE trace transport;
 - role-bound session matrix, consent-gated token issuance, and sanitized security-event sink;
 - integration of lanes into the vertical slice;
 - optional Stedi and Deepgram adapters after the fixture slice is green.
@@ -171,11 +174,13 @@ An agent must not expand its owned paths. Missing shared contracts are requested
 | ID | Task | Owner | Dependencies | Acceptance |
 | --- | --- | --- | --- | --- |
 | OP-001 | Runnable scaffold/scripts/env example | Integrator | none | dev/typecheck/test/build commands exist |
-| OP-002 | Freeze schemas, fixture, IDs, tokens | Integrator | OP-001 | all three lanes compile against contracts |
+| OP-002 | Freeze schemas, fixture, IDs, trace contract, approved tokens | Integrator | OP-001 | all three lanes compile against contracts |
+| OP-005 | Railway runtime and health contract | Integrator | OP-001 | one service listens on `PORT`, serves SPA/API, passes `/health`, and drains safely |
+| OP-006 | Sanitized live function-trace transport | Integrator | OP-003 | local/SSE updates merge by ID and session/role/subject allowlists prevent leaks; failure falls back to fixture trace state |
 | OP-101 | Workflow reducer and safety/readiness rules | Domain | OP-002 | pure tests cover happy, missing-field, identity-stop |
 | OP-201 | Seed/reset and FHIR mutation service | FHIR | OP-002 | rerun produces no duplicates |
-| OP-301 | Patient + physician UI against fixtures | UI | OP-002 | all states render and keyboard path works |
-| OP-003 | Fixture vertical-slice integration | Integrator | OP-101/201/301 | typed request reaches completed Task and Ready cockpit |
+| OP-301 | Patient + physician UI and trace rows against fixtures | UI | OP-002 | all states render, trace expands/updates, and keyboard path works |
+| OP-003 | Fixture vertical-slice integration | Integrator | OP-101/201/301 | typed request reaches completed Task and Ready cockpit with deterministic fixture trace rows; no SSE dependency |
 | OP-202 | Live Medplum reads/writes and scheduling adapter | FHIR | OP-003 | actual graph visible; slot conflict handled |
 | OP-004 | Critical browser path and security evidence | Integrator | OP-202 | exact screen sequence, sanitized application audit event, and reset-through-safety replay pass |
 | OP-401 | Stedi approved test/fixture adapter | Integrator | OP-003 | same normalized result and visible source label |
@@ -233,9 +238,15 @@ Before freeze:
 - token issuance returns `403` before voice-processing acknowledgment and after decline/revoke;
 - revocation tears down active capture/WebSocket/media queues and late provider frames or unexecuted proposals cannot mutate state;
 - the visible application security event contains only event ID, timestamp, actor role, action class, decision, correlation ID, and fixture/live label and is never rendered as Provenance;
+- trace input/output pass tool- and role-specific allowlists; server-derived session/role/subject bindings reject same-role cross-session/persona access; request/response update one row; reconnect/replay causes no duplicate mutation;
+- client trace state is namespaced by server session/role/subject, clears on context replacement, and colliding IDs cannot retain, merge, expand, or copy prior-persona output;
+- secrets, headers, prompts, chain-of-thought, `thought_signature`, raw provider payloads, raw audio/transcripts, and unrestricted FHIR resources never render in a trace;
+- Railway starts from committed scripts on the injected `PORT`, `/health` passes, and shutdown prevents late tool events from mutating state;
 - only the centralized writer mutates FHIR;
 - Deepgram/Stedi/model outage completes the typed fixture path;
 - reset/rerun creates no duplicates;
+- explicit demo `Identifier.system`/`value` constants are used consistently; a documented legacy-value fixture fails closed or migrates under the integrator, and reset plus two seeds leaves exactly one linked graph;
+- commit-response-loss and `SIGTERM`-after-commit reconcile by idempotency identifier to one graph and version-specific Provenance without a false failure or duplicate retry;
 - secret scan and browser/log inspection find no credentials or PHI payloads;
 - one deterministic critical browser path passes.
 

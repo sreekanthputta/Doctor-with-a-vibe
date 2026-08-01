@@ -1,12 +1,12 @@
-# OnePractice UI and Interaction Specification
+# VibeDoc UI and Interaction Specification
 
 > Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, `CLINIC.md`, and `ARCHITECTURE.md`.
 
 ## Design thesis
 
-OnePractice has two deliberately different surfaces:
+VibeDoc has two deliberately different surfaces:
 
-- **Patient access:** warm, calm, mobile-first, and one task at a time.
+- **Patient access:** calm, high-clarity, mobile-first, and one task at a time.
 - **Physician cockpit:** dark, dense, keyboard-first, and inspired by Cursor's agent/review workflow.
 
 The shared interaction is the **Ready Visit Rail**:
@@ -46,7 +46,7 @@ Never place the patient and physician experiences behind the same generic chat i
 
 ### Hero
 
-Display `OneCare Clinic` as the fictional practice and `Powered by OnePractice` as the platform attribution.
+Display `VibeDoc` as the product/clinic brand and `Powered by Medplum` as the endorsement on every public, patient, and physician surface.
 
 > One call. One ready visit.
 >
@@ -91,7 +91,7 @@ Production authentication requires verified control of a channel or authenticato
 
 ## Patient dashboard
 
-Use a warm ivory canvas, deep-ink typography, soft cards, generous spacing, and a dominant next-visit card:
+Use a quiet neutral canvas, high-contrast typography, restrained cards, generous spacing, and a dominant next-visit card. The accent palette remains intentionally unfrozen until one of the generated direction studies is approved:
 
 ```text
 Tuesday, August 4 · 10:30 AM
@@ -154,6 +154,20 @@ Cursor-inspired behavior:
 - compact/balanced/detailed evidence density;
 - explicit accept/edit/reject actions rather than invisible auto-apply.
 
+## Function-call trace interaction
+
+After an assistant message invokes tools, show a compact trace group directly beneath it. Each row contains a status indicator, human-readable function name, short safe summary, duration when known, and chevron. Clicking a row opens an inline disclosure or side drawer with:
+
+- allowlisted input fields;
+- output placeholder while running;
+- output values updating in place as provider/tool events arrive;
+- queued, running, awaiting-confirmation, reconciling, completed, failed, cancelled, or blocked state;
+- safe timestamps, fixture/live label, and retry state.
+
+The response updates the original request row; it does not create a disconnected duplicate. Read calls may appear concurrently. Dependent writes remain visibly sequential. A mutation with an ambiguous transport result displays `Reconciling with Medplum` and is never shown as failed or retried until its idempotency identifier and committed lineage are checked. On mobile, use an inline sheet; in the physician cockpit, use the evidence drawer. Public/patient views use friendly names and omit internal resource IDs. Physician-demo traces may show allowlisted synthetic resource references and versions.
+
+Never expose credentials, authorization headers, hidden prompts, chain-of-thought, `thought_signature`, raw provider payloads, stack traces, unrestricted FHIR resources, raw audio, or full transcripts. A trace explains execution; it is not Medplum truth, Provenance, or an access audit. See `TRACING.md`.
+
 A persistent MVP context bar displays patient name, second identifier, appointment, readiness, and provider-source mode. Encounter and recording controls remain hidden until that roadmap feature is built. The next patient may be suggested, but `Open visit` and two-identifier confirmation are required before establishing any future write or recording context.
 
 ## Exception inbox
@@ -168,7 +182,7 @@ Make exceptions a first-class queue. Each row shows:
 - reason automation stopped;
 - one clear next action.
 
-Initial categories are identity, scheduling, intake, coverage, clinical-language handoff, and provider failure. Do not display clinical urgency classifications because OnePractice is not performing triage. A symptom-bearing message displays `Clinical content received — not assessed`, creates a `requested`/unacknowledged Task owned by the configured clinical-review queue, shows neutral handoff copy, and promises no response time beyond published service hours. Only an authorized human action may transition it to `accepted`.
+Initial categories are identity, scheduling, intake, coverage, clinical-language handoff, and provider failure. Do not display clinical urgency classifications because VibeDoc is not performing triage. A symptom-bearing message displays `Clinical content received — not assessed`, creates a `requested`/unacknowledged Task owned by the configured clinical-review queue, shows neutral handoff copy, and promises no response time beyond published service hours. Only an authorized human action may transition it to `accepted`.
 
 The detail view shows what happened, the rule that stopped the workflow, exact sources, safe actions, FHIR Provenance, and a separately labeled sanitized application security event. Never imply that the application event is Medplum access audit.
 
@@ -207,10 +221,9 @@ Moss may accelerate public-label passage retrieval, but no Moss similarity score
 
 ### Patient surface
 
-- Warm ivory background
-- Deep ink text
-- Sage for completed administrative progress
-- Amber for incomplete work
+- Quiet neutral background and high-contrast text
+- One approved accent family after visual-direction review
+- Completion and attention states use icon, label, and shape in addition to color
 - Red only for a stopped or failed workflow
 - Rounded 16–20px cards
 - Large touch targets and limited simultaneous choices
@@ -218,15 +231,17 @@ Moss may accelerate public-label passage retrieval, but no Moss similarity score
 
 ### Physician surface
 
-- Graphite background
-- Slate panels with subtle one-pixel borders
-- Teal focus and selection
-- Amber exception state
+- Dark or high-contrast workspace derived from the approved visual direction
+- Layered panels with subtle one-pixel borders
+- One shared focus/accent color from the approved direction
+- Attention state distinct from destructive/failure state
 - Red only for actual stop/failure states
 - Compact typography and square controls
 - Monospace only for technical metadata
 
 Both surfaces share the logo, Ready Visit Rail, status vocabulary, and source/provenance iconography.
+
+Generated palette explorations live in `design/variants/`. No palette is implementation-approved until the user selects one or requests a blend.
 
 ## Accessibility and privacy
 
@@ -261,9 +276,11 @@ Both surfaces share the logo, Ready Visit Rail, status vocabulary, and source/pr
 ## Three-minute UI storyboard
 
 1. **0:00–0:15:** Landing page and Ready Visit Rail establish the promise.
-2. **0:15–0:55:** Synthetic patient talks or types; the assistant discloses automation, offers two policy-approved slots, and books one.
+2. **0:15–0:55:** Synthetic patient talks or types; the assistant discloses automation, offers two policy-approved slots, books one, then expands one sanitized `Book appointment` trace row for 5–8 seconds before closing it.
 3. **0:55–1:15:** Synthetic Demo Access opens the patient dashboard. The insurance member ID is missing, eligibility is `Not checked`, and the rail shows Needs attention.
 4. **1:15–1:40:** The in-app follow-up requests the synthetic member ID; the patient supplies it, eligibility runs, the same Task completes, and the rail advances to Ready.
 5. **1:40–2:20:** Switch to the dark physician cockpit; show the Ready visit and Medplum evidence pane.
 6. **2:20–2:40:** An uncertain-identity replay reveals no information and creates one new `requested`/unacknowledged exception for the separate session.
 7. **2:40–3:00:** Return to the cockpit, show the new exception count and explicit `Acknowledge` action, then expand the Ready visit evidence pane to show `Appointment`, `QuestionnaireResponse`, `Coverage`, `CoverageEligibilityRequest`, `CoverageEligibilityResponse`, completed `Task`, `CommunicationRequest`, delivered `Communication`, and `Provenance`.
+
+Rehearse with the live trace stream unavailable: the same sequence uses labeled deterministic trace fixtures and still completes under three minutes.

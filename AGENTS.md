@@ -4,11 +4,11 @@
 
 ## Mission
 
-Build **OnePractice**, a FHIR-native operations layer for **OneCare Clinic**, a fictional virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. The hackathon proof is **one call to one ready visit**: synthetic patient Maria Lopez schedules, completes intake, receives follow-up for missing administrative information, and appears in Dr. Maya Chen's single physician exception inbox backed by Medplum.
+Build **VibeDoc — Powered by Medplum**, a FHIR-native virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. The hackathon proof is **one call to one ready visit**: synthetic patient Maria Lopez schedules, completes intake, receives follow-up for missing administrative information, and appears in Dr. Maya Chen's single physician exception inbox backed by Medplum.
 
 The vision is a front office in software; humans still provide physical care, clinical judgment, legal accountability, and exception handling. Never market or implement autonomous medical practice.
 
-Read `README.md`, `HACKATHON.md`, `CLINIC.md`, `ARCHITECTURE.md`, `UI.md`, `DEEPGRAM.md`, `BUILD_PLAN.md`, `DECISIONS.md`, and `RESEARCH.md` before planning or editing. `HACKATHON.md` defines visible scope; `CLINIC.md` defines the fictional customer/roadmap but cannot expand the release; `RESEARCH.md` cannot expand it.
+Read `README.md`, `HACKATHON.md`, `CLINIC.md`, `ARCHITECTURE.md`, `UI.md`, `TRACING.md`, `DEEPGRAM.md`, `DEPLOYMENT.md`, `BUILD_PLAN.md`, `DECISIONS.md`, and `RESEARCH.md` before planning or editing. `HACKATHON.md` defines visible scope; `CLINIC.md` defines the fictional customer/roadmap but cannot expand the release; `RESEARCH.md` cannot expand it.
 
 ## Product invariant
 
@@ -40,12 +40,15 @@ Do not add live clinical decision support, encounter transcription, referrals, b
 - One centralized FHIR mutation service with an allowlist per workflow.
 - Synthetic data and replayable fixtures only.
 - Optional Deepgram Voice Agent for the live front-desk voice/chat path, using audio or `InjectUserMessage`; a deterministic typed adapter bypasses Deepgram and emits the same validated intent when unavailable. Nova-3 Medical streaming/batch with diarization is a separate future encounter-transcription path.
+- Railway is the only deployment target. Use one long-running service for the React application, minimal Node gateway, health endpoint, and sanitized live trace stream.
 
 Do not add a second database, language, message broker, or orchestration framework without a demonstrated blocker. Temporary conversation state may live in memory; durable operational state belongs in Medplum.
 
 Deepgram function selection is untrusted model output. A `FunctionCallRequest` must cross the same schema, authorization, confirmation, idempotency, and mutation gates as any other command. Voice confirmation alone is not a clinical signature. Never expose permanent Deepgram, Stedi, telephony, messaging, or organization-wide Medplum credentials in browser code.
 
 The first slice uses a closed administrative-intent grammar. Unmatched, mixed clinical/administrative, or non-administrative free text stops by default and atomically creates exactly one owned `requested` exception Task with a due policy. Only an authorized human may acknowledge it by moving it to `accepted`; automated copy must not imply it has been seen.
+
+Compact function rows may appear under assistant messages and update in real time. They show only tool-specific allowlisted input/output projections and safe status metadata. Trace streams and snapshots are server-bound to the current session, role, and allowlisted synthetic subject/persona; client-supplied identifiers cannot broaden access. Never render secrets, credentials, headers, hidden prompts, chain-of-thought, `thought_signature`, raw provider payloads, raw audio/transcripts, stack traces, or unrestricted FHIR resources. A trace is explanatory UI state, not authorization, workflow truth, Provenance, or an access audit.
 
 ## FHIR model
 
@@ -134,7 +137,7 @@ At architecture selection, before a demo-critical merge, and at demo freeze, run
 
 Run independent reviews in parallel up to the configured limit, then the remainder in a second wave. Reviewers report only. A finding is actionable only when it includes evidence, a reproducible trigger or missing state, impact, and the smallest defensible fix/test. Do not freeze with an unresolved CRITICAL or HIGH finding; explicitly record accepted MEDIUM risks.
 
-Review precedence is `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`DEEPGRAM.md` → `BUILD_PLAN.md` → `RESEARCH.md`.
+Review precedence is `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`TRACING.md`/`DEEPGRAM.md` → `DEPLOYMENT.md` → `BUILD_PLAN.md` → `RESEARCH.md`.
 
 ## Clinical AI rules
 
@@ -200,6 +203,9 @@ Minimum critical tests:
 - The system cannot acknowledge its own exception; only the configured human role can transition `requested -> accepted`.
 - No clinical proposal writes without explicit approval; rejection writes nothing.
 - Provider/model outage still completes a deterministic demo path.
+- Function traces correlate requests and responses into one updating row, enforce role-specific field allowlists, and cannot leak prohibited values across public, patient, or physician sessions.
+- Mutation traces complete only after committed versions and expected Provenance are confirmed; response-loss/shutdown ambiguity reconciles by idempotency identifier before retry.
+- The Railway build starts on the injected `PORT`, `/health` returns `200`, graceful shutdown blocks late mutations, and no browser bundle contains a server secret.
 - Seed/reset restores the exact demo state.
 
 ## Definition of done

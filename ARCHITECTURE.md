@@ -1,4 +1,4 @@
-# OnePractice Canonical Architecture
+# VibeDoc Canonical Architecture
 
 > Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, and the fictional-practice scope in `CLINIC.md`; authoritative for technical component boundaries.
 
@@ -34,11 +34,11 @@ central FHIR mutation service
 Medplum resources + Provenance
 ```
 
-Future PSTN and SMS enter through separate telephony/messaging adapters. Deepgram provides conversational speech, Think/LLM output, and function-call proposals. Those outputs are untrusted. OnePractice owns identity, authorization, policy, workflow transitions, confirmation, idempotency, mutations, and exceptions.
+Future PSTN and SMS enter through separate telephony/messaging adapters. Deepgram provides conversational speech, Think/LLM output, and function-call proposals. Those outputs are untrusted. VibeDoc owns identity, authorization, policy, workflow transitions, confirmation, idempotency, mutations, and exceptions.
 
 ## Deployment shape
 
-Use one strict-TypeScript application with React and minimal server routes. Do not create a second clinical database or a general workflow platform.
+Use one strict-TypeScript application deployed as one long-running Railway service with React and minimal Node server routes. The service listens on Railway's injected `PORT`, exposes `/health`, serves the SPA and role-bound APIs from one origin, and drains active provider/trace sessions on `SIGTERM`. Do not create a second clinical database or a general workflow platform. See `DEPLOYMENT.md`.
 
 ### Browser
 
@@ -47,6 +47,7 @@ Use one strict-TypeScript application with React and minimal server routes. Do n
 - Microphone, playback, typed input, live transcript
 - User-scoped Medplum reads where authorization permits
 - Local presentation/navigation tools
+- Compact function traces driven by sanitized local and server events
 - Uncommitted draft view models
 
 ### Minimal server gateway
@@ -56,17 +57,22 @@ Use one strict-TypeScript application with React and minimal server routes. Do n
 - Public/demo session and booking policy gate
 - Stedi secret-bearing requests
 - Central privileged/provider tool dispatcher
+- Role-bound Server-Sent Events stream and current snapshot for sanitized function-trace updates
 - Sanitized application security-event sink for decision metadata only; no PHI payloads
 - Messaging, telephony, webhooks, and background jobs when added
 - Organization/service credentials
 
 The gateway is a security and orchestration boundary, not another source of clinical truth.
 
+### Function-trace projection
+
+Every dispatched tool emits a stable application `traceId`, provider call ID when present, safe display name, status, timestamps, and tool-specific allowlisted input/output projection inside a server-derived session/role/subject context. Browser-local presentation calls update immediately; server calls stream updates over role-bound SSE. The UI namespaces and merges both sources only inside that immutable authorization context, clears trace state on session/persona replacement, and re-reads Medplum-backed view state after completion. Trace data never grants authority, substitutes for the workflow state machine, or exposes raw tool/provider/FHIR payloads. See `TRACING.md`.
+
 ## Provider authority
 
 | Layer | May provide | Never decides |
 | --- | --- | --- |
-| OnePractice | typed intents, policy results, workflow transitions, exception routing, UI | clinical facts or payer responses |
+| VibeDoc | typed intents, policy results, workflow transitions, exception routing, UI | clinical facts or payer responses |
 | Medplum | durable FHIR patient, clinical, scheduling, workflow, eligibility projection, lineage | live external payer processing result |
 | Stedi | timestamped payer/clearinghouse response | coverage guarantee, coding, medical necessity, price certainty |
 | Deepgram | speech, Think/LLM output, function-call proposal, agent events | identity, authorization, workflow transition, clinical/financial action |
@@ -77,7 +83,7 @@ Medplum is the application source of truth and the only patient-data retrieval l
 
 | State | FHIR resources |
 | --- | --- |
-| OneCare Clinic / Dr. Maya Chen / payer | practice and payer `Organization`, `Practitioner`, `PractitionerRole` |
+| VibeDoc / Dr. Maya Chen / payer | practice and payer `Organization`, `Practitioner`, `PractitionerRole` |
 | Bookable visit | `HealthcareService`, `Schedule`, `Slot`, `Appointment` |
 | Fictional patient | `Patient`; `RelatedPerson` only when a proxy is part of a later flow |
 | Policy supplied by patient | `Coverage` |
@@ -199,12 +205,14 @@ untrusted provider/model input
   -> Provenance and audit result
 ```
 
-- Stable demo identifiers use `onepractice|demo-v1:<resource>:<logical-key>`.
+- Stable demo identifiers use the explicit FHIR pair `Identifier.system = urn:vibedoc:demo` and `Identifier.value = demo-v1:<resource>:<logical-key>`; never parse a display string as `system|value`.
+- Because the application scaffold has not yet existed, no deployed legacy graph is expected. Seed/reset nevertheless checks the namespaced synthetic manifest for the documented pre-rebrand `onepractice|demo-v1:` value form and fails closed with an integrator-only migration instruction instead of silently creating a second graph.
 - Slot search and booking use the scheduling adapter; a race returns `SlotConflict` and offers a new slot.
-- Repeated function IDs do not authorize or deduplicate anything; OnePractice idempotency keys do.
+- Repeated function IDs do not authorize or deduplicate anything; VibeDoc idempotency keys do.
 - Independent reads may run concurrently. Dependent mutations never run based on LLM array order.
 - Approval re-reads sources and verifies base versions. Stale proposals require rebase/review.
 - Accepted multi-resource mutations use an atomic FHIR transaction where supported.
+- A mutation trace reaches `completed` only after the transaction response validates and the committed versions plus expected `Provenance` targets are confirmed. A lost response or shutdown after dispatch enters `reconciling`; the gateway queries by application idempotency identifier before retrying or terminalizing, so the UI cannot claim failure when the mutation may have committed.
 
 ## Trust boundaries
 

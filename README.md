@@ -1,10 +1,10 @@
-# OnePractice
+# VibeDoc
 
 > One call. One ready visit. One physician exception inbox.
 
-OnePractice is a FHIR-native operations layer for independent outpatient practices. It completes routine administrative work under published practice rules, stores durable clinical/workflow state in Medplum, and routes uncertainty to an accountable human with source, owner, and deadline.
+**VibeDoc — Powered by Medplum** is a FHIR-native operations layer for an independent adult primary-care microclinic. It completes routine administrative work under published practice rules, stores durable clinical/workflow state in Medplum, and routes uncertainty to an accountable human with source, owner, and deadline.
 
-The fictional customer is **OneCare Clinic**, a virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. It is explicitly not a hospital; physical and specialty services remain with external human-operated partners.
+VibeDoc is the fictional virtual-first clinic and product brand, operated by one family physician without dedicated administrative staff. It is explicitly not a hospital; physical and specialty services remain with external human-operated partners.
 
 Current status: architecture and hackathon scope approved; application scaffold not yet created.
 
@@ -23,10 +23,12 @@ Normative precedence:
 3. [`CLINIC.md`](./CLINIC.md) — fictional adult primary-care microclinic, physician, services, exclusions, roadmap patient
 4. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — canonical components, contracts, data ownership, state transitions
 5. [`UI.md`](./UI.md) — patient and physician interaction contract
-6. [`DEEPGRAM.md`](./DEEPGRAM.md) — optional live voice/chat adapter and roadmap clinical tools
-7. [`BUILD_PLAN.md`](./BUILD_PLAN.md) — dependency graph, parallel lanes, task board, integration cadence
-8. [`DECISIONS.md`](./DECISIONS.md) — accepted architecture decisions and superseded alternatives
-9. [`RESEARCH.md`](./RESEARCH.md) — non-normative evidence, vendor capabilities, alternatives, sources
+6. [`TRACING.md`](./TRACING.md) — compact function rows, real-time sanitized input/output, trace safety
+7. [`DEEPGRAM.md`](./DEEPGRAM.md) — optional live voice/chat adapter and roadmap clinical tools
+8. [`DEPLOYMENT.md`](./DEPLOYMENT.md) — Railway-only runtime, variables, healthcheck, deployment gates
+9. [`BUILD_PLAN.md`](./BUILD_PLAN.md) — dependency graph, parallel lanes, task board, integration cadence
+10. [`DECISIONS.md`](./DECISIONS.md) — accepted architecture decisions and superseded alternatives
+11. [`RESEARCH.md`](./RESEARCH.md) — non-normative evidence, vendor capabilities, alternatives, sources
 
 If documents disagree, the earlier item in this list wins. Research describes possibilities; it does not expand the release.
 
@@ -35,12 +37,16 @@ If documents disagree, the earlier item in this list wins. Research describes po
 ```text
 fixture-first typed vertical slice
   -> live Medplum resource graph
+  -> sanitized real-time function traces
   -> safety/race/reset tests
   -> optional Stedi test adapter
   -> optional Deepgram Voice Agent adapter
+  -> one Railway service
   -> reviewer council
   -> freeze and rehearse
 ```
+
+Railway is the sole deployment target. The hackathon runtime is one service that serves the React application, minimal secure gateway, `/health`, and role-bound trace stream; Medplum remains the only durable clinical/workflow store.
 
 The multi-agent process follows ECC's strongest ideas: plan on disk, freeze contracts before parallel writers, give each lane exclusive file ownership, integrate every 60–90 minutes, use read-only fresh-context reviewers, and require evidence-based handoffs. It intentionally does not copy ECC's extensive agent catalog, hooks, or legacy Codex schema.
 
