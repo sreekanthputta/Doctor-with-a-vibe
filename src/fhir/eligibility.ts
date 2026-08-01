@@ -32,7 +32,7 @@ export function buildEligibilityRequest(input: EligibilityContext & { memberId: 
   };
 }
 
-export function buildEligibilityResponse(input: EligibilityContext & {
+export function buildEligibilityResponse(input: Pick<EligibilityContext, 'responseBusinessId' | 'createdAt'> & {
   request: CoverageEligibilityRequest;
   result: EligibilityAdapterResult;
 }): CoverageEligibilityResponse {
@@ -42,21 +42,43 @@ export function buildEligibilityResponse(input: EligibilityContext & {
   if (!input.request.id) {
     throw new Error('Eligibility response requires a persisted request');
   }
+  const request = input.request;
+  const coverage = request.insurance?.[0]?.coverage;
+  const validPurpose = request.purpose?.length === 1 && request.purpose[0] === 'benefits';
+  if (
+    request.status !== 'active'
+    || !validPurpose
+    || !request.patient?.reference
+    || !request.provider?.reference
+    || !request.insurer?.reference
+    || request.insurance?.length !== 1
+    || request.insurance[0]?.focal !== true
+    || !coverage?.reference
+  ) {
+    throw new Error('Eligibility response requires a complete and consistent persisted request');
+  }
+  const item = input.result.copay === undefined ? undefined : [{
+    category: { coding: [{ system: 'urn:vibedoc:benefit-category', code: 'medical-care' }] },
+    benefit: [{
+      type: { coding: [{ system: 'urn:vibedoc:benefit-type', code: 'copay' }] },
+      allowedMoney: { value: input.result.copay, currency: 'USD' as const },
+    }],
+  }];
   return {
     resourceType: 'CoverageEligibilityResponse',
     identifier: [
       demoIdentifier('eligibility-response', input.responseBusinessId),
       { system: 'urn:vibedoc:eligibility-source', value: `${input.result.source}:${input.result.transactionId}` },
     ],
-    status: 'active',
-    purpose: ['benefits'],
-    patient: { reference: input.patientReference },
+    status: request.status,
+    purpose: request.purpose,
+    patient: request.patient,
     created: input.createdAt,
     request: { reference: `CoverageEligibilityRequest/${input.request.id}` },
-    requestor: { reference: input.providerReference },
-    insurer: { reference: input.insurerReference },
+    requestor: request.provider,
+    insurer: request.insurer,
     outcome: 'complete',
-    insurance: [{ coverage: { reference: input.coverageReference }, inforce: input.result.active }],
+    insurance: [{ coverage, inforce: input.result.active, ...(item ? { item } : {}) }],
   };
 }
 

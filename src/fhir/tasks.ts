@@ -1,17 +1,28 @@
 import type { Task } from '@medplum/fhirtypes';
+import { DEMO_V1 } from '../test/fixtures/demo-v1';
 import { demoIdentifier, requireVersionedReference } from './identifiers';
 
 const TASK_CODE_SYSTEM = 'urn:vibedoc:task-code';
 
 interface OwnedDueTaskInput {
   taskBusinessId: string;
-  practitionerRoleReference: string;
   dueStart: string;
   dueEnd: string;
 }
 
+function requireIsoInstant(value: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    throw new Error('Task due timestamps must be valid ISO datetimes');
+  }
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new Error('Task due timestamps must be valid ISO datetimes');
+  return timestamp;
+}
+
 function taskBase(input: OwnedDueTaskInput, code: string): Task {
-  if (new Date(input.dueEnd).getTime() <= new Date(input.dueStart).getTime()) {
+  const start = requireIsoInstant(input.dueStart);
+  const end = requireIsoInstant(input.dueEnd);
+  if (end <= start) {
     throw new Error('Task due end must follow start');
   }
   return {
@@ -20,9 +31,16 @@ function taskBase(input: OwnedDueTaskInput, code: string): Task {
     status: 'requested',
     intent: 'order',
     code: { coding: [{ system: TASK_CODE_SYSTEM, code }] },
-    owner: { reference: input.practitionerRoleReference },
+    owner: { reference: DEMO_V1.practitionerRoleReference },
     restriction: { period: { start: input.dueStart, end: input.dueEnd } },
   };
+}
+
+export function buildExceptionTask(input: OwnedDueTaskInput & { category: string }): Task {
+  if (!/^[a-z][a-z0-9-]{2,63}$/.test(input.category)) {
+    throw new Error('Exception Task requires a valid category');
+  }
+  return taskBase(input, input.category);
 }
 
 export function buildMissingMemberTask(input: OwnedDueTaskInput & {
@@ -52,7 +70,7 @@ export function buildUncertainIdentityTask(input: OwnedDueTaskInput & { correlat
   if (!input.correlationId) {
     throw new Error('Uncertain identity Task requires correlation');
   }
-  return taskBase(input, 'resolve-uncertain-identity');
+  return buildExceptionTask({ ...input, category: 'resolve-uncertain-identity' });
 }
 
 export function planHumanTaskAcceptance(

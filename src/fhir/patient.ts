@@ -1,6 +1,5 @@
 import type { Identifier, Patient } from '@medplum/fhirtypes';
 import { DEMO_V1 } from '../test/fixtures/demo-v1';
-import { demoIdentifier } from './identifiers';
 
 export interface ConditionalCreate<T> {
   resource: T;
@@ -8,7 +7,10 @@ export interface ConditionalCreate<T> {
 }
 
 export function buildDemoPatientIdentifier(): Identifier {
-  return demoIdentifier('patient', DEMO_V1.patient.persona);
+  return {
+    system: DEMO_V1.identifierSystem,
+    value: DEMO_V1.patientBusinessId,
+  };
 }
 
 export function buildDemoPatientCreate(): ConditionalCreate<Patient> {

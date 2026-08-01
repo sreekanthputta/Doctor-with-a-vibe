@@ -1,15 +1,30 @@
 import type { Appointment } from '@medplum/fhirtypes';
+import { DEMO_V1 } from '../test/fixtures/demo-v1';
 import { demoIdentifier } from './identifiers';
 
 export interface SchedulingRepository {
-  book(slotReference: string, appointment: Appointment): Promise<Appointment>;
+  book(appointment: Appointment): Promise<Appointment>;
+}
+
+function requireSingleSlotReference(appointment: Appointment): string {
+  const references = appointment.slot?.map((slot) => slot.reference).filter((reference): reference is string => Boolean(reference)) ?? [];
+  if (appointment.slot?.length !== 1 || references.length !== 1 || !/^Slot\/[A-Za-z0-9.-]+$/.test(references[0] ?? '')) {
+    throw new Error('Appointment requires exactly one Slot reference');
+  }
+  return references[0];
 }
 
 /** Deterministic fixture repository; live `$book` conformance is implemented in Wave 2. */
 export class InMemorySchedulingRepository implements SchedulingRepository {
   readonly #bookings = new Map<string, Appointment>();
 
-  book(slotReference: string, appointment: Appointment): Promise<Appointment> {
+  book(appointment: Appointment): Promise<Appointment> {
+    let slotReference: string;
+    try {
+      slotReference = requireSingleSlotReference(appointment);
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error('Appointment Slot validation failed'));
+    }
     const existing = this.#bookings.get(slotReference);
     const businessId = appointment.identifier?.[0]?.value;
     if (existing) {
@@ -32,7 +47,6 @@ export class InMemorySchedulingRepository implements SchedulingRepository {
 export function buildAppointmentDraft(input: {
   appointmentBusinessId: string;
   patientReference: string;
-  practitionerReference: string;
   healthcareServiceReference: string;
   slotReference: string;
   startsAt: string;
@@ -47,7 +61,7 @@ export function buildAppointmentDraft(input: {
     slot: [{ reference: input.slotReference }],
     participant: [
       { actor: { reference: input.patientReference }, status: 'accepted' },
-      { actor: { reference: input.practitionerReference }, status: 'accepted' },
+      { actor: { reference: DEMO_V1.practitionerRoleReference }, status: 'accepted' },
       { actor: { reference: input.healthcareServiceReference }, status: 'accepted' },
     ],
   };
@@ -61,13 +75,13 @@ export function captureBookedReferences(appointment: Appointment): {
   if (appointment.status !== 'booked') {
     throw new Error('Appointment response is not booked');
   }
-  const slotReferences = appointment.slot?.flatMap((slot) => slot.reference ? [slot.reference] : []) ?? [];
-  if (!appointment.id || !appointment.meta?.versionId || slotReferences.length === 0) {
+  if (!appointment.id || !appointment.meta?.versionId) {
     throw new Error('Booked Appointment requires id, versionId, and Slot references');
   }
+  const slotReference = requireSingleSlotReference(appointment);
   return {
     appointmentReference: `Appointment/${appointment.id}`,
     appointmentVersionId: appointment.meta.versionId,
-    slotReferences,
+    slotReferences: [slotReference],
   };
 }

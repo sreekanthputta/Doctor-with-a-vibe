@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_V1 } from '../../test/fixtures/demo-v1';
 import { buildAppointmentDraft, captureBookedReferences } from '../scheduling';
 
 describe('Scheduling mapping', () => {
@@ -6,7 +7,6 @@ describe('Scheduling mapping', () => {
     const appointment = buildAppointmentDraft({
       appointmentBusinessId: 'appointment-workflow-1',
       patientReference: 'Patient/patient-1',
-      practitionerReference: 'Practitioner/maya',
       healthcareServiceReference: 'HealthcareService/adult-primary-care',
       slotReference: 'Slot/slot-1030',
       startsAt: '2026-08-04T10:30:00-05:00',
@@ -16,7 +16,7 @@ describe('Scheduling mapping', () => {
     expect(appointment.slot).toEqual([{ reference: 'Slot/slot-1030' }]);
     expect(appointment.participant?.map((participant) => participant.actor?.reference)).toEqual([
       'Patient/patient-1',
-      'Practitioner/maya',
+      DEMO_V1.practitionerRoleReference,
       'HealthcareService/adult-primary-care',
     ]);
   });
@@ -40,6 +40,17 @@ describe('Scheduling mapping', () => {
     expect(() => captureBookedReferences({ resourceType: 'Appointment', status: 'booked', participant: [] })).toThrow(
       'Booked Appointment requires id, versionId, and Slot references',
     );
+  });
+
+  it('rejects a booked response with multiple Slot references', () => {
+    expect(() => captureBookedReferences({
+      resourceType: 'Appointment',
+      id: 'server-appt-9',
+      meta: { versionId: '1' },
+      status: 'booked',
+      slot: [{ reference: 'Slot/one' }, { reference: 'Slot/two' }],
+      participant: [],
+    })).toThrow('exactly one Slot reference');
   });
 
   it('rejects server references until the Appointment is actually booked', () => {

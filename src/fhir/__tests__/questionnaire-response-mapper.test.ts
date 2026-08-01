@@ -87,4 +87,57 @@ describe('Questionnaire mapping', () => {
     };
     expect(() => planQuestionnaireResponseCompletion(malformed)).toThrow('Intake answer type is invalid');
   });
+
+  it('rejects the wrong canonical, status, duplicate/unknown linkIds, or mismatched patient binding', () => {
+    const response = {
+      ...buildQuestionnaireResponse({
+        patientReference: 'Patient/patient-1',
+        authoredAt: DEMO_V1.clock,
+        answers: {
+          'contact-email': ' maria@example.test ',
+          'contact-phone': ' 3125550101 ',
+          'coverage-payer-name': ' Aetna ',
+          'coverage-member-id': ` ${DEMO_V1.memberId} `,
+          'administrative-communication-consent': true,
+        },
+      }),
+      id: 'qr-1',
+      meta: { versionId: '2' },
+    };
+    expect(() => planQuestionnaireResponseCompletion({ ...response, questionnaire: 'urn:wrong|v1' }))
+      .toThrow('canonical');
+    expect(() => planQuestionnaireResponseCompletion({ ...response, status: 'completed' }))
+      .toThrow('in-progress');
+    expect(() => planQuestionnaireResponseCompletion({ ...response, source: { reference: 'Patient/other' } }))
+      .toThrow('same bound patient');
+    const duplicate = response.item?.[0];
+    if (!duplicate) throw new Error('Test fixture must include an intake item');
+    expect(() => planQuestionnaireResponseCompletion({ ...response, item: [...(response.item ?? []), duplicate] }))
+      .toThrow('exactly once');
+    expect(() => planQuestionnaireResponseCompletion({ ...response, item: [...(response.item ?? []), { linkId: 'unexpected' }] }))
+      .toThrow('allowed linkIds');
+
+    const completion = planQuestionnaireResponseCompletion(response);
+    expect(completion.resource.item?.find((item) => item.linkId === 'coverage-payer-name')?.answer?.[0]?.valueString)
+      .toBe('Aetna');
+  });
+
+  it('rejects blank required strings after trimming', () => {
+    const response = {
+      ...buildQuestionnaireResponse({
+        patientReference: 'Patient/patient-1',
+        authoredAt: DEMO_V1.clock,
+        answers: {
+          'contact-email': 'maria@example.test',
+          'contact-phone': '3125550101',
+          'coverage-payer-name': '   ',
+          'coverage-member-id': DEMO_V1.memberId,
+          'administrative-communication-consent': true,
+        },
+      }),
+      id: 'qr-1',
+      meta: { versionId: '2' },
+    };
+    expect(() => planQuestionnaireResponseCompletion(response)).toThrow('non-empty');
+  });
 });

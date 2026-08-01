@@ -5,7 +5,6 @@ function appointment(id: string) {
   return buildAppointmentDraft({
     appointmentBusinessId: id,
     patientReference: `Patient/${id}`,
-    practitionerReference: 'Practitioner/maya',
     healthcareServiceReference: 'HealthcareService/adult-primary-care',
     slotReference: 'Slot/slot-1030',
     startsAt: '2026-08-04T10:30:00-05:00',
@@ -16,8 +15,8 @@ function appointment(id: string) {
 describe('SchedulingRepository contract', () => {
   it('allows exactly one winner when two requests compete for one free Slot', async () => {
     const repository = new InMemorySchedulingRepository();
-    const winner = repository.book('Slot/slot-1030', appointment('workflow-1'));
-    const conflict = repository.book('Slot/slot-1030', appointment('workflow-2'));
+    const winner = repository.book(appointment('workflow-1'));
+    const conflict = repository.book(appointment('workflow-2'));
 
     await expect(winner).resolves.toMatchObject({ status: 'booked' });
     await expect(conflict).rejects.toThrow('Slot is no longer free');
@@ -26,8 +25,18 @@ describe('SchedulingRepository contract', () => {
   it('returns the same booking for an idempotent retry', async () => {
     const repository = new InMemorySchedulingRepository();
     const draft = appointment('workflow-1');
-    const first = await repository.book('Slot/slot-1030', draft);
-    const retry = await repository.book('Slot/slot-1030', draft);
+    const first = await repository.book(draft);
+    const retry = await repository.book(draft);
     expect(retry).toEqual(first);
+  });
+
+  it('rejects a reservation unless the Appointment carries exactly one valid Slot reference', async () => {
+    const repository = new InMemorySchedulingRepository();
+    const draft = appointment('workflow-1');
+    await expect(repository.book({ ...draft, slot: [] })).rejects.toThrow('exactly one Slot reference');
+    await expect(repository.book({ ...draft, slot: [{ reference: 'Slot/one' }, { reference: 'Slot/two' }] }))
+      .rejects.toThrow('exactly one Slot reference');
+    await expect(repository.book({ ...draft, slot: [{ reference: 'Patient/not-a-slot' }] }))
+      .rejects.toThrow('exactly one Slot reference');
   });
 });

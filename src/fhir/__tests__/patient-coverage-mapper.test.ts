@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEMO_V1 } from '../../test/fixtures/demo-v1';
 import { buildDemoPatientCreate, buildDemoPatientIdentifier } from '../patient';
 import { buildCoverage, planCoverageMemberIdUpdate } from '../coverage';
+import { decideDemoIdentity } from '../../domain/identity-gate';
 
 describe('Patient and Coverage mapping', () => {
   it('derives the synthetic Patient identifier server-side and supplies a conditional create', () => {
@@ -10,10 +11,10 @@ describe('Patient and Coverage mapping', () => {
 
     expect(identifier).toEqual({
       system: DEMO_V1.identifierSystem,
-      value: 'demo-v1:patient:maria-demo',
+      value: DEMO_V1.patientBusinessId,
     });
     expect(create.ifNoneExist).toBe(
-      `identifier=${encodeURIComponent(`${DEMO_V1.identifierSystem}|demo-v1:patient:maria-demo`)}`,
+      `identifier=${encodeURIComponent(`${DEMO_V1.identifierSystem}|${DEMO_V1.patientBusinessId}`)}`,
     );
     expect(create.resource).toMatchObject({
       resourceType: 'Patient',
@@ -23,6 +24,20 @@ describe('Patient and Coverage mapping', () => {
       birthDate: '1974-02-14',
       address: [{ postalCode: '60601' }],
     });
+  });
+
+  it('uses exactly the same business identifier as the identity decision', () => {
+    const decision = decideDemoIdentity({
+      kind: 'identity-submission',
+      givenName: DEMO_V1.patient.givenName,
+      familyName: DEMO_V1.patient.familyName,
+      birthDate: DEMO_V1.patient.birthDate,
+      postalCode: DEMO_V1.patient.postalCode,
+    }, []);
+    expect(decision.outcome).toBe('verified-new-demo');
+    expect(buildDemoPatientCreate().resource.identifier?.[0]?.value).toBe(
+      decision.outcome === 'uncertain' ? undefined : decision.patientBusinessId,
+    );
   });
 
   it('creates Coverage without inventing a member ID and plans a guarded update', () => {

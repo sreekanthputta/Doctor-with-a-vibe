@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildMissingMemberTask, buildUncertainIdentityTask, planHumanTaskAcceptance } from '../tasks';
+import { DEMO_V1 } from '../../test/fixtures/demo-v1';
+import { buildExceptionTask, buildMissingMemberTask, buildUncertainIdentityTask, planHumanTaskAcceptance } from '../tasks';
 
 const taskContext = {
-  practitionerRoleReference: 'PractitionerRole/maya-role',
   dueStart: '2026-08-01T15:00:00-05:00',
   dueEnd: '2026-08-02T15:00:00-05:00',
 };
@@ -25,7 +25,7 @@ describe('Task profiles', () => {
       code: { coding: [{ system: 'urn:vibedoc:task-code', code: 'collect-missing-member-id' }] },
       for: { reference: 'Patient/patient-1' },
       focus: { reference: 'QuestionnaireResponse/qr-1' },
-      owner: { reference: 'PractitionerRole/maya-role' },
+      owner: { reference: DEMO_V1.practitionerRoleReference },
       restriction: { period: { start: taskContext.dueStart, end: taskContext.dueEnd } },
     });
     expect(task.input).toEqual([
@@ -52,13 +52,37 @@ describe('Task profiles', () => {
       status: 'requested',
       intent: 'order',
       code: { coding: [{ system: 'urn:vibedoc:task-code', code: 'resolve-uncertain-identity' }] },
-      owner: { reference: 'PractitionerRole/maya-role' },
+      owner: { reference: DEMO_V1.practitionerRoleReference },
     });
     expect(task.for).toBeUndefined();
     expect(task.focus).toBeUndefined();
     expect(task.input).toBeUndefined();
     expect(JSON.stringify(task)).not.toMatch(/Maria|Lopez|1974|60601|Patient\//);
     expect(task.identifier?.some((id) => id.value === 'correlation-1')).toBe(false);
+  });
+
+  it('preserves a generic exception category while remaining human-owned, due, requested, and unbound', () => {
+    const task = buildExceptionTask({
+      ...taskContext,
+      taskBusinessId: 'exception-session-2',
+      category: 'unsupported-administrative-intent',
+    });
+    expect(task).toMatchObject({
+      status: 'requested',
+      owner: { reference: DEMO_V1.practitionerRoleReference },
+      code: { coding: [{ system: 'urn:vibedoc:task-code', code: 'unsupported-administrative-intent' }] },
+      restriction: { period: { start: taskContext.dueStart, end: taskContext.dueEnd } },
+    });
+    expect(task.for).toBeUndefined();
+    expect(task.focus).toBeUndefined();
+    expect(task.input).toBeUndefined();
+  });
+
+  it('rejects malformed or reversed Task due timestamps', () => {
+    expect(() => buildExceptionTask({ ...taskContext, taskBusinessId: 'bad-time', category: 'uncertain-identity', dueStart: 'not-a-date' }))
+      .toThrow('valid ISO');
+    expect(() => buildExceptionTask({ ...taskContext, taskBusinessId: 'bad-order', category: 'uncertain-identity', dueEnd: taskContext.dueStart }))
+      .toThrow('follow start');
   });
 
   it('allows only the human physician role to acknowledge a requested exception', () => {
@@ -68,7 +92,7 @@ describe('Task profiles', () => {
     );
     const acceptance = planHumanTaskAcceptance(task, {
       actorType: 'human',
-      actorReference: 'PractitionerRole/maya-role',
+      actorReference: DEMO_V1.practitionerRoleReference,
     });
     expect(acceptance.expectedVersion).toBe('3');
     expect(acceptance.resource.status).toBe('accepted');

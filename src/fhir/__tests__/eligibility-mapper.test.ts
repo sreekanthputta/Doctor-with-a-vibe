@@ -25,7 +25,12 @@ describe('Eligibility mapping', () => {
       transactionId: 'stedi-fixture-1',
       active: true,
     };
-    const response = buildEligibilityResponse({ ...context, request, result });
+    const response = buildEligibilityResponse({
+      responseBusinessId: context.responseBusinessId,
+      createdAt: context.createdAt,
+      request,
+      result,
+    });
 
     expect(response).toMatchObject({
       resourceType: 'CoverageEligibilityResponse',
@@ -49,7 +54,7 @@ describe('Eligibility mapping', () => {
       transactionId: 'stedi-fixture-1',
       active: true,
     };
-    const response = buildEligibilityResponse({ ...context, request, result });
+    const response = buildEligibilityResponse({ responseBusinessId: context.responseBusinessId, createdAt: context.createdAt, request, result });
     expect(JSON.stringify(response)).not.toContain('not-returned');
     expect(response.insurance?.[0]?.item).toBeUndefined();
     expect(projectEligibility(response)).toEqual({
@@ -63,9 +68,52 @@ describe('Eligibility mapping', () => {
   it('does not map a failed adapter result as completed evidence', () => {
     const request = { ...buildEligibilityRequest({ ...context, memberId: 'AETNA-DEMO-2048' }), id: 'cerq-1' };
     expect(() => buildEligibilityResponse({
-      ...context,
+      responseBusinessId: context.responseBusinessId,
+      createdAt: context.createdAt,
       request,
       result: { outcome: 'error', source: 'fixture', transactionId: 'failed-1' },
     })).toThrow('Only a completed adapter result can create eligibility evidence');
+  });
+
+  it('derives all linkage and purpose fields from the persisted request and round-trips a returned copay', () => {
+    const request = {
+      ...buildEligibilityRequest({ ...context, memberId: 'AETNA-DEMO-2048' }),
+      id: 'cerq-1',
+      meta: { versionId: '3' },
+    };
+    const response = buildEligibilityResponse({
+      responseBusinessId: context.responseBusinessId,
+      createdAt: context.createdAt,
+      request,
+      result: { outcome: 'complete', source: 'fixture', transactionId: 'copay-1', active: true, copay: 40 },
+    });
+    expect(response).toMatchObject({
+      status: request.status,
+      purpose: request.purpose,
+      patient: request.patient,
+      insurer: request.insurer,
+      requestor: request.provider,
+      insurance: [{ coverage: request.insurance?.[0]?.coverage, inforce: true }],
+    });
+    expect(response.insurance?.[0]?.item?.[0]?.benefit?.[0]).toMatchObject({
+      type: { coding: [{ system: 'urn:vibedoc:benefit-type', code: 'copay' }] },
+      allowedMoney: { value: 40, currency: 'USD' },
+    });
+    expect(projectEligibility(response).copay).toEqual({ state: 'returned', value: 40 });
+  });
+
+  it('rejects an incomplete or inconsistent persisted eligibility request', () => {
+    const request = { ...buildEligibilityRequest({ ...context, memberId: 'AETNA-DEMO-2048' }), id: 'cerq-1' };
+    const common = {
+      responseBusinessId: context.responseBusinessId,
+      createdAt: context.createdAt,
+      result: { outcome: 'complete', source: 'fixture', transactionId: 'invalid-request' } as const,
+    };
+    expect(() => buildEligibilityResponse({ ...common, request: { ...request, patient: undefined } as never }))
+      .toThrow('persisted request');
+    expect(() => buildEligibilityResponse({ ...common, request: { ...request, purpose: ['discovery'] } }))
+      .toThrow('persisted request');
+    expect(() => buildEligibilityResponse({ ...common, request: { ...request, insurance: [] } }))
+      .toThrow('persisted request');
   });
 });
