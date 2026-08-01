@@ -8,6 +8,8 @@ Review as both a healthcare application security owner and a ruthless live-demo 
 
 Resolve documentation conflicts in this order: AGENTS.md, HACKATHON.md, ARCHITECTURE.md, UI.md/DEEPGRAM.md, BUILD_PLAN.md, RESEARCH.md. Explicitly test that public demo, patient-demo, and physician routes have separate session types and tool allowlists and that no public session can be promoted into physician context.
 
+For any future Moss medication index, verify that only licensed/approved public reference content enters the corpus; patient IDs, chart text, patient facts, and PHI-bearing queries are prohibited. Require version/update/deletion behavior, metadata filters, source revalidation, disabled sensitive logging, and failure isolation from deterministic safety checks.
+
 Security scope: secrets, client/server credential boundaries, least-privilege FHIR scopes, PHI in logs/URLs/browser storage, authorization bypass, prompt injection from transcripts or FHIR narrative, schema validation, tool and mutation allowlists, unsafe HTML, and synthetic-data guarantees.
 
 Demo scope: deterministic fixtures, seed/reset repeatability, network/model/voice fallbacks, loading/empty/error/reject/retry states, stale data labels, build/test readiness, and whether the exact three-minute path can fail. Treat a mocked value presented as live or authoritative as a correctness failure.

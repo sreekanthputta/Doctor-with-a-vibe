@@ -33,7 +33,7 @@ Future phone/SMS -> PSTN/messaging adapter ----------┘   workflow brain + UX
          source of truth   transaction authority
 ```
 
-OnePractice owns policy, sequencing, authorization, approval, idempotency, and exception routing. No vendor independently decides a clinical or financial action. Medplum remains authoritative for patient/clinical/workflow state and supports exact scoped retrieval. Stedi is authoritative for its current payer transaction and is synchronized into Medplum. Deepgram provides conversational speech, Think/LLM output, and function-call proposals; every output is untrusted and has no workflow authority. Moss is not part of the architecture.
+OnePractice owns policy, sequencing, authorization, approval, idempotency, and exception routing. No vendor independently decides a clinical or financial action. Medplum remains authoritative for patient/clinical/workflow state and supports exact scoped retrieval. Stedi is authoritative for its current payer transaction and is synchronized into Medplum. Deepgram provides conversational speech, Think/LLM output, and function-call proposals; every output is untrusted and has no workflow authority. Moss is not part of the administrative MVP; a future clinical-support experiment may index only public, versioned medication-label evidence.
 
 The workflow brain is deterministic around the model:
 
@@ -191,7 +191,7 @@ A referral begins as a proposal. After physician approval, create a `ServiceRequ
 - **Deepgram Voice Agent:** optional live front-desk voice and typed-agent-chat adapter; typed turns can use `InjectUserMessage`, but deterministic typed fallback bypasses Deepgram.
 - **Deepgram Nova streaming/batch:** future encounter transcription with diarization and finalized segments.
 - **Stedi:** optional test eligibility adapter; show only returned fields.
-- **Search:** use exact, authorization-scoped Medplum queries. Do not add Moss or another semantic index unless measured retrieval requirements later justify it.
+- **Search:** use exact, authorization-scoped Medplum queries for all patient facts. A future Moss experiment may retrieve public medication-label passages only after benchmarks show a material latency/context advantage; it cannot become the interaction engine or source of patient truth.
 - **Messaging/PSTN/model:** fixture-first, disabled without breaking the demo.
 
 Provider secrets remain server-side. Browser voice requires a short-lived token from a minimal backend; permanent Deepgram or Stedi keys never enter client JavaScript. Never send real PHI during the hackathon. Deepgram entity-level PHI redaction must not be assumed for the conversational path.

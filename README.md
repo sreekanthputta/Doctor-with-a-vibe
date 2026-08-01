@@ -10,7 +10,7 @@ Current status: architecture and hackathon scope approved; application scaffold 
 
 A fictional patient books an annual wellness visit through browser voice or text, supplies intake information, resolves one missing synthetic insurance member ID, receives a labeled eligibility response, and becomes Ready. The physician sees the visit in a Cursor-inspired cockpit with Medplum resources, timestamps, and provenance. A separate uncertain-identity replay stops safely and creates an owned exception without revealing PHI.
 
-Medplum is the only required live dependency. Deepgram and Stedi sit behind typed adapters with deterministic fallbacks. Patient lookup and retrieval use exact, scoped Medplum queries. Moss is deliberately not used. Clinical chat, encounter transcription, referrals, orders, claims, PSTN, and SMS are roadmap.
+Medplum is the only required live dependency. Deepgram and Stedi sit behind typed adapters with deterministic fallbacks. Patient lookup and retrieval use exact, scoped Medplum queries. Moss is not used in the administrative MVP; it is reserved for a later, benchmark-gated index of public medication-label evidence—not patient records or safety decisions. Clinical chat, encounter transcription, referrals, orders, claims, PSTN, and SMS are roadmap.
 
 ## Documentation map
 

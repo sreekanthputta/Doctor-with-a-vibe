@@ -74,13 +74,13 @@ The internal reviewers rejected the full clinic vision as a one-day build. The s
 | Medplum | FHIR clinical and operational record | patients, appointments, forms, chart, orders, tasks, committed claim representation | live payer processing state | only required live dependency |
 | Stedi | payer/clearinghouse transactions | response returned by a payer/clearinghouse at a timestamp | coverage guarantee, coding, medical necessity, fee schedules | labeled eligibility test fixture/API |
 | Deepgram | conversational speech, Think/LLM output, function proposals, and transcription | provider events and finalized transcript output from the selected model | identity, workflow authority, authorization, triage, or clinical judgment | optional shared live voice/chat interface; deterministic typed fallback bypasses it |
-| Moss | low-latency semantic search index | no source-of-truth data | permissions, active medications/allergies, availability, balances, eligibility or claim status | evaluated and rejected for this build; use exact scoped Medplum queries |
+| Moss | low-latency semantic search index | public versioned medication-label chunks only in a future benchmark | patient facts, permissions, safety decisions, interactions, availability, eligibility, balances, or claim status | excluded from administrative MVP; conditional medication-evidence roadmap |
 
 Stedi's current published catalog supports eligibility and benefits, insurance discovery, coordination of benefits, professional/institutional/dental claims, claim attachments, 277CA acknowledgments, 276/277 claim-status checks, and 835 remittance responses. However, test API keys currently support approved real-time eligibility fixtures; production payer transactions require a production account, appropriate BAA/account controls, enrollment where applicable, and operational reconciliation. Claims are roadmap, not part of the judged demo.
 
 For eligibility, `Coverage` represents the patient policy. The canonical demo graph uses FHIR `CoverageEligibilityRequest` and `CoverageEligibilityResponse`, with an identifier/reference to the original Stedi transaction or labeled fixture artifact. Do not turn the result into a boolean `verified` field. Stedi owns the external response; Medplum stores a timestamped normalized projection, source identifier, and freshness/reconciliation state.
 
-Moss was evaluated and rejected for this build. The first slice needs exact patient-, tenant-, resource-, and status-scoped Medplum queries, not semantic retrieval. Adding Moss now would duplicate data, introduce another permissions/deletion surface, and weaken demo reliability without a measured retrieval bottleneck. Reconsider a rebuildable semantic index only after real query/latency evidence demonstrates a need.
+Moss was evaluated and rejected for the administrative MVP. The first slice needs exact patient-, tenant-, resource-, and status-scoped Medplum queries, not semantic retrieval. A later medication-evidence experiment is materially different: index only public, versioned DailyMed label sections and retrieve by normalized drug/product plus section, without patient facts or identifiers. Add it only after recall, latency, token, version, deletion, and failure benchmarks beat direct authoritative retrieval without weakening traceability.
 
 Deepgram is not a telephone or SMS network. A production phone number still needs a PSTN/telephony adapter, call state, consent, transfer, delivery, retry, and failure handling. Browser voice or prerecorded audio is the honest hackathon channel.
 
@@ -98,6 +98,17 @@ For a question such as “Can I suggest paracetamol?” the UI can provide:
 - a transparent explanation of which inputs were considered and which were not checked.
 
 It should not simply answer yes/no, invent an interaction, select a dose, or create a prescription. FDA’s January 2026 CDS guidance emphasizes that the healthcare professional must be able to independently review the basis of a recommendation and not rely primarily on the software. RxNorm normalizes drug identity; it is not itself a complete interaction or prescribing engine. DailyMed exposes current structured product labeling, not patient-specific medical judgment.
+
+The future evidence pipeline is deliberately layered:
+
+1. Normalize the spoken/typed candidate to product and ingredients with RxNorm.
+2. Fetch exact authorized patient facts from Medplum; preserve status, source, version, and freshness.
+3. Run only checks backed by validated medication knowledge sources, and enumerate unavailable checks.
+4. Ask Moss several section-scoped public-label queries; never send patient facts or chart text into Moss.
+5. Revalidate each returned DailyMed `setId`, version, section, and current/archived status before display.
+6. Return an evidence review containing candidate identity, patient facts used, missing data, alerts, checked/unavailable checks, and citations. The only allowed action is clinician review.
+
+DailyMed's v2 web services expose current SPL information, product-level RxCUIs, label documents, and version history; bulk label releases are also available. DailyMed is not complete for every FDA-regulated product and is not a comprehensive drug-interaction database. NLM states that RxNav's drug-interaction feature was discontinued on January 2, 2024, so it must not be used as the proposed interaction engine.
 
 ## Recording and extraction architecture
 
@@ -187,6 +198,14 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 4. What conversation and function-call context must be supplied after reconnect, and how should duplicate or in-flight function calls be handled?
 5. What retention/model-improvement settings should be used for synthetic hackathon audio and later PHI, and what PHI redaction is not supported?
 
+### Moss — roadmap validation, not an MVP dependency
+
+1. Can an index be built and queried entirely locally from our approved public corpus without sending query text or telemetry to managed infrastructure?
+2. How are exact metadata filters, version replacement, deletions, cache invalidation, and offline updates enforced?
+3. What benchmark tooling can measure required-section recall, p95 latency, and token reduction against direct DailyMed retrieval?
+4. What logging, retention, encryption, tenant isolation, export, and deletion controls apply even when the intended corpus is public?
+5. What DailyMed redistribution or packaging constraints must we satisfy before distributing an index?
+
 ### Judges/organizers
 
 1. Is voice mandatory or one possible interface?
@@ -206,7 +225,11 @@ Do not claim an eliminated FTE, fewer adverse events, increased revenue, fewer d
 - [Medplum AI guidance](https://www.medplum.com/docs/ai)
 - [FDA Clinical Decision Support Software guidance, January 2026](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/clinical-decision-support-software)
 - [NLM RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/index.html)
-- [DailyMed developer resources](https://dailymed.nlm.nih.gov/dailymed/app-support.cfm)
+- [RxNorm APIs](https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html)
+- [RxNav FAQ and interaction-feature notice](https://lhncbc.nlm.nih.gov/RxNav/information/FAQs.html)
+- [DailyMed web services](https://dailymed.nlm.nih.gov/dailymed/app-support-web-services.cfm)
+- [DailyMed bulk drug labels](https://dailymed.nlm.nih.gov/dailymed/spl-resources-all-drug-labels.cfm)
+- [Moss on Y Combinator](https://www.ycombinator.com/companies/moss)
 - [Deepgram Browser Agent overview](https://developers.deepgram.com/docs/browser-agent-overview)
 - [Deepgram Inject User](https://developers.deepgram.com/docs/voice-agent-inject-user-message)
 - [Deepgram FunctionCallRequest](https://developers.deepgram.com/docs/voice-agent-function-call-request)

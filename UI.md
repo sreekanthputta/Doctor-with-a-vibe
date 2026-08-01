@@ -187,6 +187,20 @@ When the ready-visit slice is deterministic:
 
 Deepgram is implementation detail. The user-facing action is `Start recording`, not `Talk to Deepgram`.
 
+## Medication evidence roadmap
+
+When clinical chat is built, “Can I consider amoxicillin?” opens an evidence card rather than returning a yes/no chat answer. The card displays:
+
+- exact normalized product/ingredients and identity-match confidence;
+- versioned Medplum facts used, separated by chart-confirmed and patient-reported state;
+- missing or stale patient data;
+- deterministic alerts and the validated knowledge source behind each;
+- DailyMed passages with section, `setId`, label version/effective date, and current/archived status;
+- checks performed and checks unavailable;
+- `Review only` status, with no “Safe,” “Accept all,” dose selection, or automatic prescription action.
+
+Moss may accelerate public-label passage retrieval, but no Moss similarity score appears as a clinical warning. Stale, missing, or unverified sources render a visible unavailable state.
+
 ## Visual system
 
 ### Patient surface

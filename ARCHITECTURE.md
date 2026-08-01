@@ -242,3 +242,31 @@ Ask -> inspect sources -> edit/review -> sign -> transmit -> acknowledge -> trac
 ```
 
 External networks and accountable signatures remain mandatory. See `DEEPGRAM.md` for the subordinate tool/action design.
+
+## Roadmap medication evidence retrieval
+
+Moss is excluded from the administrative MVP. It may be evaluated later as a low-latency index over public, versioned medication-label passages when clinical chat is built. It is a retrieval accelerator, not “compressed medical knowledge,” a rules engine, or a source of truth.
+
+```text
+doctor names candidate medication
+  -> RxNorm normalization and ingredient/product resolution
+  -> exact authorized Medplum patient facts
+  -> deterministic checks from validated medication knowledge sources
+  -> section-scoped Moss retrieval over public DailyMed SPL passages
+  -> revalidate source setId/version/current status
+  -> evidence-oriented explanation with missing/unavailable checks
+  -> doctor reviews and decides; no automatic order
+```
+
+Hard boundaries:
+
+- Medplum supplies allergies, medications, conditions, patient-reported history, and relevant observations with status/source/freshness.
+- RxNorm supplies normalized identity and relationships; it is not a complete interaction checker, and RxNav's interaction feature was discontinued in January 2024.
+- DailyMed supplies current Structured Product Labeling submitted to FDA and supports version history; a label is not a complete interaction, dosing, or patient-safety engine.
+- Deterministic allergy-class, duplicate-therapy, drug–drug interaction, contraindication, renal/hepatic, pregnancy, dose, and monitoring checks run only when an appropriate validated knowledge source and required patient inputs are available. Unavailable checks are displayed, never inferred.
+- Moss indexes public reference text only, partitioned by RxCUI/product, ingredient, label `setId`, label version/effective time, and section. Patient IDs, chart text, patient facts, prompts containing patient facts, and PHI never enter the index.
+- Retrieval runs as multiple section-scoped queries—boxed warnings, contraindications, warnings/precautions, interactions, impairment, special populations, ingredients, and monitoring—rather than one “is this safe?” similarity query.
+- Every result is rechecked against the authoritative label/version before display. Stale or missing evidence fails visibly.
+- The response says what was checked, not checked, missing, and found. It never says a medication is “safe,” selects treatment/dose, or writes a prescription.
+
+Adoption gate: benchmark exact DailyMed/RxNorm retrieval without Moss against Moss for recall by required section, p95 latency, token reduction, version/deletion correctness, offline behavior, and failure recovery. Add Moss only if it materially improves the clinical workflow without reducing evidence recall or traceability.

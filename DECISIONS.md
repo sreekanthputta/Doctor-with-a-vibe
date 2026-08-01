@@ -58,7 +58,7 @@ Reference inspected: `affaan-m/ECC@e4e4163101f162881e628f300a9ca4e6a940bcea`.
 Status: accepted
 Decision: future orders, referrals, prescriptions, notes, and claims follow Ask → inspect → edit/review → sign → transmit → acknowledge → track. Creating a FHIR resource is not external delivery, and conversational assent is not a clinical signature.
 
-## D-011 — No Moss in the current architecture
+## D-011 — No Moss in the administrative MVP; conditional medication-evidence roadmap
 
 Status: accepted
-Decision: use exact, authorization-scoped Medplum queries for patient and workflow retrieval. Do not add Moss or another semantic index without a measured query or latency limitation that the existing source-of-truth access cannot meet.
+Decision: use exact, authorization-scoped Medplum queries for all patient and workflow retrieval. Moss may later be benchmarked as an index of public, versioned medication-label passages only. It never stores patient facts, performs safety checks, or replaces RxNorm normalization, validated interaction/rules data, authoritative-source revalidation, or clinician judgment.

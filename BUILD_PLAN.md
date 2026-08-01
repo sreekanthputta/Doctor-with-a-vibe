@@ -258,3 +258,14 @@ Each finding requires severity, evidence, trigger, impact, and smallest fix/test
 6. Workflow builder and visible multi-agent animation
 
 Never cut the deterministic typed path, Medplum graph, safety stop, Task completion/readiness rule, provider labels, seed/reset, or rehearsed demo.
+
+## Post-MVP medication evidence spike
+
+Do not start this during the administrative build. After clinical-chat prerequisites and external clinical/privacy review, run a separate benchmark spike:
+
+1. Freeze a synthetic medication-question corpus and required DailyMed sections.
+2. Implement RxNorm normalization plus direct DailyMed retrieval as the baseline.
+3. Define the validated rule/interaction provider separately; an LLM, Moss, RxNorm, and DailyMed are not substitutes.
+4. Index only public label chunks in Moss with RxCUI/product, ingredient, `setId`, version/effective time, section, and source URL.
+5. Compare required-section recall, stale-version rejection, p95 latency, token reduction, deletion/update behavior, offline/failure behavior, and citations.
+6. Adopt Moss only if it improves speed/context without lowering recall or traceability. Patient facts remain exact Medplum queries and never enter the Moss index or query.

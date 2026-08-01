@@ -141,6 +141,7 @@ Review precedence is `AGENTS.md` → `HACKATHON.md` → `ARCHITECTURE.md` → `U
 - Label generated content as a draft for clinician review.
 - Show the exact patient resources, timestamps, inputs, evidence source, uncertainty, and known unknowns behind a clinical-support answer.
 - A medication chat may retrieve current signed instructions, allergies, and authoritative references; it must not independently recommend a medication or dose. The physician must be able to review the basis and decide.
+- A future Moss integration may retrieve versioned passages from a public medication-label corpus only. It never stores patient facts, decides safety, performs allergy/class matching, substitutes for a validated interaction knowledge source, or supplies uncited evidence. Patient facts come from exact authorized Medplum queries; retrieved passages are revalidated against their authoritative source/version before display.
 - Preserve negation, temporality, experiencer, dosage/units, and source timestamps in transcript extraction tests.
 - Never let generated documentation automatically justify generated billing codes.
 - “Not found” means not found in the searched scope, never clinically absent.

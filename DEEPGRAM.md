@@ -199,6 +199,7 @@ Read/draft roadmap tools:
 - `open_patient_context`
 - `get_patient_summary`
 - `get_medications_and_allergies`
+- `prepare_medication_evidence_review`
 - `get_lab_trends`
 - `search_patient_sources`
 - `stage_note_changes`
@@ -208,6 +209,8 @@ Read/draft roadmap tools:
 - `draft_patient_instructions`
 
 Clinical commit/transmit tools are separate commands and require a locked patient context, explicit reviewed action card, current source versions, an authenticated authorized user, and the correct signature/integration workflow. They are not included in the hackathon demo.
+
+`prepare_medication_evidence_review` is a read-only roadmap orchestrator, not an LLM safety judgment. It normalizes the candidate with RxNorm, obtains exact authorized patient facts from Medplum, runs only configured validated checks, retrieves section-scoped public label evidence through an optional Moss adapter, revalidates the authoritative label/version, and returns structured `alerts`, `missingData`, `checksPerformed`, `checksUnavailable`, and cited `evidence`. Its `allowedAction` is always `review_only`; prescribing remains a separate signed workflow.
 
 ### Billing — roadmap, not the judged workflow
 
