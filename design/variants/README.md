@@ -24,4 +24,6 @@ Neutral white, ink navy, signal orange, and electric mint. The boldest operation
 
 No direction is approved yet. Global color tokens remain unfrozen. The next step is to select A, B, C, or specify a blend such as “A structure with B accent.”
 
+Implementation may freeze shell geometry, spacing scale, typography roles, semantic token names, and component states before this choice. It must not freeze concrete global colors or approve color snapshots until the user selects a direction. After selection, the UI lane writes failing visual/state tests from the canonical four-shell fixtures before adding styles.
+
 All visible records are synthetic. Function-trace examples are sanitized display projections, not raw provider payloads or audit records. Final screen mockups must be regenerated from the approved palette using the exact frozen Maria Lopez/Dr. Maya Chen fixtures and UI vocabulary before implementation.

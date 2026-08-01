@@ -14,7 +14,7 @@ The credible promise is not “replace every hospital employee.” It is:
 
 The believable ambition is a microclinic, not a hospital. AAFP describes family medicine as first-contact, continuous, comprehensive care and highlights prevention, chronic-illness management, specialist coordination, and follow-up. The fictional practice is deliberately adult-only for the first product, even though full family-medicine training spans all ages. This product restriction reduces pediatric consent/dosing and obstetric complexity; it does not redefine the specialty.
 
-The best hackathon wedge is **one call to one ready visit**. It demonstrates scheduling, intake, missing-information follow-up, optional eligibility, a physician exception inbox, and a visible Medplum graph in one coherent loop. Encounter transcription, clinical chat, referrals, and revenue-cycle automation are logical expansions after the core loop works.
+The best hackathon wedge is **one request to one ready visit**. It demonstrates scheduling, intake, missing-information follow-up, optional eligibility, a physician exception inbox, and a visible Medplum graph in one coherent loop. Encounter transcription, clinical chat, referrals, and revenue-cycle automation are logical expansions after the core loop works.
 
 ## Why the broad vision needs a wedge
 
@@ -46,7 +46,7 @@ The practical target is not zero humans. It is a radically lean team where human
 
 | Project | Demo | Strength | Main weakness | Verdict |
 | --- | --- | --- | --- | --- |
-| **VibeDoc Ready Visit** | call/web request → appointment → intake → missing-field follow-up → physician inbox | clearest end-to-end story; deep Medplum fit; safe and measurable | scheduling beta and identity edge cases | **Build this** |
+| **VibeDoc Ready Visit** | voice/web request → appointment → intake → missing-field follow-up → physician inbox | clearest end-to-end story; deep Medplum fit; safe and measurable | scheduling beta and identity edge cases | **Build this** |
 | Closed-Loop Referral Front Desk | referral arrives → packet completion → patient booking → receipt tracking | strong specialist-practice pain; great FHIR graph | external transmission and clinical urgency add risk | best second workflow |
 | Result Rescue | result enters queue → patient contact → acknowledged follow-up | patient-safety narrative and clear closure | clinical escalation is hard; weaker sponsor fit | strong safety-track alternative |
 | AuthReady | existing order → eligibility/evidence packet → administrative task | payer ROI and natural Stedi fit | policy/authorization claims are easy to overstate | good back-office expansion |

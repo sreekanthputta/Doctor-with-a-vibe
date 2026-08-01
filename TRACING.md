@@ -12,7 +12,7 @@ Found two Tuesday appointments.
 ⌄ 3 actions
   ✓ Search availability       182 ms
   ✓ Apply scheduling policy    11 ms
-  ● Hold 9:30 appointment     running
+  ● Hold 10:30 appointment    running
 ```
 
 Each row is keyboard-focusable and clickable. Opening it reveals a compact inline panel or right-side drawer:
@@ -26,7 +26,7 @@ running 10:02:41.118
 
 Input (sanitized)
 {
-  "slot": "Tue Aug 4 · 9:30 AM",
+  "slot": "Tue Aug 4 · 10:30 AM",
   "visitType": "adult-annual-wellness"
 }
 
@@ -147,3 +147,9 @@ Input/output must pass a runtime trace schema and explicit field allowlist after
 - Voice revocation cancels active items and late function events cannot mutate state.
 - SSE reconnect restores the current sanitized snapshot without duplicating rows.
 - Fixture/live labels remain accurate during provider outage and fallback.
+
+## Implementation ownership
+
+The root integrator owns executable trace schemas, tool-specific input/output projection schemas, session-bound server storage/snapshot/SSE, and integration tests. The UI lane owns only display components and presentation state under `src/ui/**`; it consumes validated `TraceEvent` view models and cannot widen projections or authorize a stream.
+
+TDD order is schema rejection first, then pure reducer correlation/context-reset tests, then fixture trace UI, then server snapshot/SSE, and finally Railway reconnect/shutdown integration. Live transport is never a dependency of the deterministic Ready flow.

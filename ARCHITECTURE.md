@@ -64,6 +64,61 @@ Use one strict-TypeScript application deployed as one long-running Railway servi
 
 The gateway is a security and orchestration boundary, not another source of clinical truth.
 
+## Implementation modules
+
+Dependencies point inward toward frozen runtime contracts and pure domain behavior. Provider SDK types never leak into domain or UI modules.
+
+```text
+src/contracts/**       Zod schemas + inferred types; integrator-owned
+src/test/fixtures/**   immutable cross-lane demo/provider/view-model fixtures; integrator-owned
+src/domain/**          pure policy, reducer, readiness, idempotent command planning
+src/fhir/**            FHIR mappings, seed/reset manifest, repository, mutation writer
+src/ui/**              four page shells, components, view-model fixtures
+src/adapters/**        initial scripted conversation/eligibility implementations; integrator-owned
+src/providers/**       optional Deepgram/Stedi implementations added in Wave 2
+src/server/**          role sessions, tool gateway, SSE, health, shutdown
+src/app/**             router/composition only; integrator-owned
+tests/integration/**   cross-module fixture/Medplum tests; integrator-owned
+tests/e2e/**           four-shell browser path; integrator-owned
+```
+
+Allowed dependency direction:
+
+```text
+UI -> contracts
+domain -> contracts
+FHIR/adapters/server -> contracts + domain
+app composition -> all modules
+```
+
+`src/domain` never imports React, Medplum, provider SDKs, server code, or the UI. `src/ui` never imports Medplum/provider SDKs or the central FHIR writer. Cross-lane behavior is exercised through frozen contracts and fixtures rather than private imports.
+
+## Route and session shells
+
+| Shell | Route family | Session authority |
+| --- | --- | --- |
+| Public access | `/` | `public-booking` only |
+| Synthetic demo access | `/demo` | neutral; creates a new allowlisted role session |
+| Patient workspace | `/patient/*` | `patient-demo` bound to `maria-demo` |
+| Physician cockpit | `/physician/*` | `physician-demo` bound to Dr. Maya Chen |
+
+Conversation is embedded in `/`; it is not a separate fifth shell. Patient intake/appointment and physician visit/exception details are nested panels or client routes inside their parent shell. The server issues a new role-bound session for every trust-domain transition; client navigation never promotes a session.
+
+## Session transport
+
+- Use one opaque `__Host-vibedoc_session` cookie: `Secure`, `HttpOnly`, `Path=/`, no `Domain`, and `SameSite=Lax` (or stricter after deployed-origin verification).
+- Never place a session in a URL or local storage. Session bootstrap and all role/trace responses use `Cache-Control: no-store`.
+- Public → patient and every persona/role replacement rotate the cookie and revoke the prior server session. Replaying the old cookie returns `401/403` and no cached view remains.
+- Physician and public/patient demo surfaces run in separate browser profiles/Playwright browser contexts. Same-origin tabs in one cookie jar are not used to demonstrate simultaneous different roles.
+- State-changing requests require the expected same-origin `Origin`/`Referer` plus a server-bound CSRF token from the no-store session bootstrap. SSE/snapshot/tool access derives role/persona only from the server session.
+- Session expiry/revocation closes trace streams and clears browser query/cache/trace/copy/expanded state before rendering another actor.
+
+The role session and application voice capability are separate. Voice consent grants a short-lived application capability bound to the current role session; the server may then issue a short-lived provider token. Revoking voice immediately invalidates the application capability, closes the known provider/media session, denies further token issuance, and rejects late or replayed tool events, while preserving or safely rotating the same-role administrative session so deterministic typing continues. An already issued Deepgram token expires according to its provider TTL and is not claimed to be instantly revocable unless live conformance proves otherwise. It contains no PHI or durable workflow authority.
+
+## Test seams
+
+Tests are written before implementation according to `TEST_PLAN.md`. Pure domain tests use no network or clock. FHIR tests use synthetic Bundle fixtures and a repository contract. UI tests use `ReadyVisitVM`/trace fixtures and command spies. Adapter contract tests run the scripted implementation always and optional live providers only behind explicit environment gates. Browser tests exercise the same built Railway entrypoint with external providers disabled by default.
+
 ### Function-trace projection
 
 Every dispatched tool emits a stable application `traceId`, provider call ID when present, safe display name, status, timestamps, and tool-specific allowlisted input/output projection inside a server-derived session/role/subject context. Browser-local presentation calls update immediately; server calls stream updates over role-bound SSE. The UI namespaces and merges both sources only inside that immutable authorization context, clears trace state on session/persona replacement, and re-reads Medplum-backed view state after completion. Trace data never grants authority, substitutes for the workflow state machine, or exposes raw tool/provider/FHIR payloads. See `TRACING.md`.
@@ -78,6 +133,8 @@ Every dispatched tool emits a stable application `traceId`, provider call ID whe
 | Deepgram | speech, Think/LLM output, function-call proposal, agent events | identity, authorization, workflow transition, clinical/financial action |
 
 Medplum is the application source of truth and the only patient-data retrieval layer in this build. Stedi owns its external transaction response; Medplum stores a timestamped normalized projection and source identifier. Do not add a semantic index until exact scoped Medplum queries have a measured limitation.
+
+The deterministic reset seed contains the practice/payer organizations, Dr. Maya Chen and role, HealthcareService, Schedule with two August 4, 2026 slots at 09:30 and 10:30 America/Chicago, the versioned Questionnaire, and published practice policy. It intentionally does not pre-create Maria's Patient or any appointment/workflow resource. The public happy path creates Maria with a stable business identifier and selects the 10:30 slot. Derived UI fixtures may represent later states, but they are not seed authority.
 
 ## First-slice resource graph
 
@@ -107,9 +164,9 @@ disclosure
   -> slot-selection
   -> booked
   -> intake
-  -> eligibility
   -> needs-attention  # required insurance member ID missing
-  -> follow-up response
+  -> follow-up response / member-ID resolution
+  -> eligibility
   -> ready            # original Task completed
 ```
 
@@ -117,7 +174,19 @@ Separate terminal/safety states: `stopped`, `provider-failure`, `cancelled`.
 
 Canonical readiness rule:
 
-> A visit is Ready only when every v1 required field is present, the booking is current, the eligibility check has a visible returned/not-returned/not-checked state, and no required-field `Task` remains open.
+> A visit is Ready only when every v1 required field is present, the booking is current, a linked eligibility request/response transaction has persisted and validated as `completed` from either the labeled fixture or approved live adapter, and no required-field `Task` remains open. Individual benefit fields may still be absent and render `not-returned`/`not-checked`.
+
+Eligibility transaction lifecycle is distinct from benefit-field availability:
+
+```ts
+type EligibilityTransactionState =
+  | 'not-run'
+  | 'in-progress'
+  | 'completed'
+  | 'failed';
+```
+
+`completed` requires a persisted linked `CoverageEligibilityRequest` and `CoverageEligibilityResponse`, validated source/business identifier, and the configured accepted response outcome. The demo fixture uses `outcome='complete'`. Before a valid member ID, the adapter is never called and transaction state remains `not-run`. If the live adapter fails, the labeled fixture may complete the transaction; if both fail or persistence is partial/malformed, the original required Task stays open, Ready remains false, and the UI shows Needs attention/provider failure.
 
 For this derivation, `requested`, `received`, `accepted`, `ready`, `in-progress`, and `on-hold` are open. `completed` is historical and never increments the active-exception badge. `rejected` or `failed` is not Ready; it routes to a new explicit resolution path.
 
@@ -164,6 +233,11 @@ type PayerField<T> =
   | { status: 'returned'; value: T; observedAt: string }
   | { status: 'not-returned' | 'not-checked' | 'stale'; observedAt?: string };
 
+type DemoIdentityDecision =
+  | { outcome: 'verified-new-demo'; persona: 'maria-demo'; businessIdentifier: string }
+  | { outcome: 'exact-existing-demo'; persona: 'maria-demo'; patientRef: string }
+  | { outcome: 'uncertain'; safeSessionLabel: string };
+
 type SafetyDecision =
   | { action: 'continue' }
   | {
@@ -180,6 +254,8 @@ type SafetyDecision =
 ```
 
 The v1 conversation schema is a closed administrative grammar: disclosure/voice-consent acknowledgment, identity fields, routine annual-wellness scheduling, slot selection, demographics, coverage fields, form answers, and approved administrative FAQs. Any unmatched, mixed clinical/administrative, or non-administrative free text stops by default. A stop and its owned exception `Task` are one reducer outcome/transaction; safe copy never claims that a person has reviewed it.
+
+For the synthetic demo, root freezes Maria's allowlisted normalized identity fields. The server derives `demo-v1:patient:maria`; clients may not submit a business identifier. Exact allowlisted input with no existing identifier yields `verified-new-demo`; exact fields plus the server-derived existing identifier yield `exact-existing-demo`. For two simultaneous exact requests, one conditional create wins and the loser re-reads that single identifier and becomes `exact-existing-demo`. Multiple existing candidates, near matches, forged identifiers, and every other identity yield `uncertain`. There is no fuzzy auto-link or automatic merge. Conditional create/search plus workflow idempotency prevents duplicate Patient or workflow graphs.
 
 Provider interfaces:
 
@@ -211,8 +287,40 @@ untrusted provider/model input
 - Repeated function IDs do not authorize or deduplicate anything; VibeDoc idempotency keys do.
 - Independent reads may run concurrently. Dependent mutations never run based on LLM array order.
 - Approval re-reads sources and verifies base versions. Stale proposals require rebase/review.
-- Accepted multi-resource mutations use an atomic FHIR transaction where supported.
-- A mutation trace reaches `completed` only after the transaction response validates and the committed versions plus expected `Provenance` targets are confirmed. A lost response or shutdown after dispatch enters `reconciling`; the gateway queries by application idempotency identifier before retrying or terminalizing, so the UI cannot claim failure when the mutation may have committed.
+- Wave 1 freezes the conservative MVP mode `post-commit-versioned`: validate the committed response, re-read the exact returned version, and create version-specific Provenance as a separate idempotent write. The UI/demo never calls this atomic.
+- Before OP-202 live Medplum transport, the FHIR live gate runs a synthetic hosted conformance spike for transaction `fullUrl`/reference resolution, conditional Patient create, scheduling `$book`, identifier propagation, returned versions, exact cleanup refs, and post-commit Provenance targets. An `atomic-versioned` optimization is roadmap-only unless separately proven after G6; it cannot change the Wave 1 contract or block writers.
+- A mutation trace reaches `completed` only after the transaction response validates and the committed versions plus expected Provenance targets are confirmed. If a create committed but its follow-up Provenance is missing, the mutation is not retried; it remains `reconciling` or `blocked · committed, lineage pending` until lineage is repaired. A lost response or shutdown after dispatch queries by application idempotency identifier before retrying or terminalizing.
+
+## Frozen FHIR workflow profiles
+
+### Missing-member-ID Task
+
+- stable VibeDoc business identifier;
+- `status='requested'`, `intent='order'`;
+- `code` uses `system=urn:vibedoc:task-code`, `code=collect-missing-member-id`;
+- `for=Patient/Maria`;
+- `focus` references the in-progress `QuestionnaireResponse`;
+- `supportingInfo` references the Appointment and Coverage;
+- `owner` references Dr. Chen's seeded `PractitionerRole`/configured human-review queue;
+- `restriction.period` contains the due window.
+
+Supplying the answer may move the Task directly from `requested` to `completed` under the published administrative rule after Coverage, eligibility evidence, and QuestionnaireResponse completion persist. Only a configured human may acknowledge it through `requested -> accepted`; automation never claims acknowledgment.
+
+### Uncertain-identity Task
+
+Use a stable session-derived business identifier, `status='requested'`, `intent='order'`, `code.system=urn:vibedoc:task-code`, `code.code=resolve-uncertain-identity`, accountable human `owner`, and due period. It contains no Patient `for`, Patient focus, candidate identifiers, or PHI. Only the safe session label/correlation metadata may be retained.
+
+### Eligibility field projection
+
+`not-returned`, `not-checked`, and `stale` are application `ReadyVisitVM` states, not invented FHIR benefit or outcome codes. Omitted payer fields remain absent from `CoverageEligibilityResponse.insurance.item`; the mapper never fabricates items. `Coverage.subscriberId` contains the synthetic payer member ID and is distinct from VibeDoc business identifiers.
+
+### Questionnaire and response
+
+Freeze `Questionnaire.url = urn:vibedoc:questionnaire:adult-annual-wellness-intake`, `Questionnaire.version = demo-v1`, and response canonical `urn:vibedoc:questionnaire:adult-annual-wellness-intake|demo-v1`. Exact linkIds are `contact-email` (`string`, 1..1), `contact-phone` (`string`, 1..1), `coverage-payer-name` (`string`, 1..1), `coverage-member-id` (`string`, 1..1 for completion), and `administrative-communication-consent` (`boolean`, 1..1). In the deterministic typed patient path, `source=Patient/Maria` and `author=Patient/Maria`; a future agent-recorded channel uses a separately seeded/authorized Device author. Each save updates `authored`, uses expected-version/If-Match protection, preserves source, and validates against the referenced Questionnaire before changing `in-progress -> completed`.
+
+### Scheduling cleanup
+
+Treat the baseline seed manifest and workflow-run cleanup manifest separately. The hosted spike verifies whether the proposed Appointment business identifier survives `$book`. Always retain the exact returned Appointment and busy Slot references. Reset deletes only exact namespaced workflow references recorded through the verified identifier/lineage mechanism, then restores the two baseline slots; it never broad-searches or deletes unrelated resources.
 
 ## Trust boundaries
 

@@ -1,12 +1,12 @@
 # VibeDoc
 
-> One call. One ready visit. One physician exception inbox.
+> One request. One ready visit. One physician exception inbox.
 
 **VibeDoc — Powered by Medplum** is a FHIR-native operations layer for an independent adult primary-care microclinic. It completes routine administrative work under published practice rules, stores durable clinical/workflow state in Medplum, and routes uncertainty to an accountable human with source, owner, and deadline.
 
 VibeDoc is the fictional virtual-first clinic and product brand, operated by one family physician without dedicated administrative staff. It is explicitly not a hospital; physical and specialty services remain with external human-operated partners.
 
-Current status: architecture and hackathon scope approved; application scaffold not yet created.
+Current status: architecture, hackathon scope, and the test-first implementation contract are frozen. The next step is Gate 0A: create the strict-TypeScript scaffold, shared contracts, immutable fixtures, test harness, and reproducible clean-worktree gate before starting three parallel writer lanes.
 
 ## Hackathon proof
 
@@ -27,8 +27,9 @@ Normative precedence:
 7. [`DEEPGRAM.md`](./DEEPGRAM.md) — optional live voice/chat adapter and roadmap clinical tools
 8. [`DEPLOYMENT.md`](./DEPLOYMENT.md) — Railway-only runtime, variables, healthcheck, deployment gates
 9. [`BUILD_PLAN.md`](./BUILD_PLAN.md) — dependency graph, parallel lanes, task board, integration cadence
-10. [`DECISIONS.md`](./DECISIONS.md) — accepted architecture decisions and superseded alternatives
-11. [`RESEARCH.md`](./RESEARCH.md) — non-normative evidence, vendor capabilities, alternatives, sources
+10. [`TEST_PLAN.md`](./TEST_PLAN.md) — test pyramid, red-green-refactor protocol, suites, fixtures, and release gates
+11. [`DECISIONS.md`](./DECISIONS.md) — accepted architecture decisions and superseded alternatives
+12. [`RESEARCH.md`](./RESEARCH.md) — non-normative evidence, vendor capabilities, alternatives, sources
 
 If documents disagree, the earlier item in this list wins. Research describes possibilities; it does not expand the release.
 
@@ -36,6 +37,8 @@ If documents disagree, the earlier item in this list wins. Research describes po
 
 ```text
 fixture-first typed vertical slice
+  -> failing contract/domain/UI tests
+  -> smallest implementation to green
   -> live Medplum resource graph
   -> sanitized real-time function traces
   -> safety/race/reset tests
@@ -49,6 +52,8 @@ fixture-first typed vertical slice
 Railway is the sole deployment target. The hackathon runtime is one service that serves the React application, minimal secure gateway, `/health`, and role-bound trace stream; Medplum remains the only durable clinical/workflow store.
 
 The multi-agent process follows ECC's strongest ideas: plan on disk, freeze contracts before parallel writers, give each lane exclusive file ownership, integrate every 60–90 minutes, use read-only fresh-context reviewers, and require evidence-based handoffs. It intentionally does not copy ECC's extensive agent catalog, hooks, or legacy Codex schema.
+
+Every feature is developed red → green → refactor. A lane must record the expected failing test before implementation, make only its owned suite green, and hand off both red and green evidence. The root integrator owns shared contracts, dependency files, composition, cross-lane integration tests, and commits.
 
 ## Repository
 

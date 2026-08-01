@@ -17,6 +17,16 @@ When Deepgram is enabled, build live voice and live typed chat on the same role-
 
 Deepgram documents `InjectUserMessage` specifically for chat/text interfaces and says the agent responds as though the user spoke the message. Current documentation does not describe a per-turn pure-text mode that bypasses Speak/TTS. Confirm billing and any supported TTS-disable mechanism with the sponsor; do not assume muted audio avoids TTS cost.
 
+Deepgram is a Wave 2 optional provider. Implementation begins only after the scripted `ConversationAdapter` and complete typed fixture slice pass. The provider lives in `src/providers/deepgram/**`, receives only root-frozen contracts, and cannot modify domain, FHIR, UI, server/session, or shared contract files.
+
+Test-first order:
+
+1. Run the root-owned conversation-adapter contract suite against a deliberately incomplete Deepgram adapter and record the intended RED assertion.
+2. Map audio and `InjectUserMessage` events into the frozen `AdministrativeIntent` union.
+3. Reject malformed, unknown, mixed, duplicated, late, or unauthorized function requests.
+4. Prove consent-gated token issuance, revoke/late-frame behavior, fixture fallback, and equivalent domain outcomes.
+5. Run optional live synthetic conformance only when explicitly enabled; never make it a normal test dependency.
+
 ## Session flow
 
 ```text
@@ -143,7 +153,7 @@ This gateway stores no duplicate clinical database. It protects permanent/servic
 
 The token endpoint must issue least-privilege short-lived credentials, bind requests to an allowed origin and application session, apply rate and abuse limits, and never return the permanent Deepgram key. The server session must contain a timestamped acknowledgment of the displayed voice-processing disclosure (including disclosure version/provider); absent, declined, expired, or revoked acknowledgment returns `403`, while deterministic typing remains available. Confirm the supported token scope and TTL with Deepgram before claiming production readiness.
 
-Revocation is active, not merely prospective: stop the microphone track, clear queued audio/playback, close the Voice Agent WebSocket, invalidate the server session/token where supported, discard unexecuted function proposals, and reject any late frame or function response for that revoked session. The UI then remains in deterministic typed mode.
+Revocation is active at the application boundary: stop the microphone track, clear queued audio/playback, close the known Voice Agent WebSocket, invalidate the application voice capability, deny further provider-token issuance, discard unexecuted function proposals, and reject any late or replayed frame, function request, or function response for that revoked voice session. Preserve or safely rotate the same-role administrative session so the UI continues in deterministic typed mode without retaining voice authority. An already issued Deepgram token is allowed to expire under its provider TTL; the application does not claim immediate provider-token revocation unless optional live conformance demonstrates it. Provider tokens contain no PHI or durable mutation authority.
 
 ### Safe browser-side functions
 
@@ -307,6 +317,9 @@ Deepgram is an optional live enhancement for voice and chat in the ready-visit f
 - Direct token requests before voice-processing acknowledgment, after decline, or after revoke return `403`.
 - No token, WebSocket, or audio capture starts before affirmative voice-processing consent; declining continues by typing.
 - Revocation tears down the active microphone/WebSocket, drops queued media and unexecuted tool proposals, and late frames cannot mutate state.
+- After voice revoke, application-capability use and new provider-token issuance return `403`, late or replayed tool events are rejected, and a typed administrative command succeeds through the preserved/rotated same-role session. Replay of an already issued provider token during its TTL is measured only by optional live conformance.
+- The scripted and Deepgram implementations pass the same adapter-contract corpus and produce equivalent validated intents for the canonical request.
+- No Deepgram SDK object crosses `src/providers/deepgram/**`; no provider test requires a permanent key.
 
 ## Official references
 

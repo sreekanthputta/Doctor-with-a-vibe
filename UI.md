@@ -17,28 +17,35 @@ Request -> Appointment -> Intake -> Coverage response -> Needs attention -> Read
 
 The product should feel fast and intelligent because state changes are immediate, sources are visible, and exceptions are precise—not because animated agents make invisible decisions.
 
-## Information architecture
+## Four-shell information architecture
+
+The MVP uses four page shells. Tabs, drawers, sheets, and nested client routes may change the visible panel without creating another independently designed application surface.
 
 ```text
-Public
-├── Landing page
-├── Talk/type with front desk
-└── Synthetic demo access
+/                         PublicAccessShell
+├── landing/brand promise
+├── talk or type with front desk
+└── voice consent and Ready Visit Rail
 
-Patient portal
+/demo                     SyntheticDemoAccessShell
+├── patient persona entry -> new patient-demo session
+└── physician persona entry -> new physician-demo session
+
+/patient/*                PatientWorkspaceShell
 ├── Home / next appointment
-├── Intake forms
-├── Appointment details
+├── Intake
+├── Appointment
 ├── Coverage response
-└── Administrative assistant
+└── Administrative messages
 
-Physician workspace
+/physician/*              PhysicianCockpitShell
 ├── Tomorrow
 ├── Exceptions
 ├── Ready-visit workspace
-├── Resource/provenance inspector
-└── Encounter review — roadmap
+└── Resource/provenance inspector
 ```
+
+`/front-desk` is not a fifth shell: the conversation opens within `/`. Patient and physician internal views use state or static nested paths only; never place a patient, appointment, Questionnaire, Task, or other resource identifier in a URL. Function traces, exception details, coverage evidence, Medplum resources, and Provenance are drawers or inline expansions—not pages.
 
 Never place the patient and physician experiences behind the same generic chat interface.
 
@@ -48,7 +55,7 @@ Never place the patient and physician experiences behind the same generic chat i
 
 Display `VibeDoc` as the product/clinic brand and `Powered by Medplum` as the endorsement on every public, patient, and physician surface.
 
-> One call. One ready visit.
+> One request. One ready visit.
 >
 > Schedule, complete intake, and arrive prepared.
 
@@ -88,6 +95,8 @@ Username-only access is allowed solely as a hackathon shortcut:
 - Reset sessions and data deterministically.
 
 Production authentication requires verified control of a channel or authenticator, such as a one-time link/code or passkey, plus secure sessions, expiry, recovery, audit, authorization, and step-up verification for sensitive actions.
+
+The neutral `/demo` shell never carries patient or physician authority. Choosing an allowlisted persona calls a distinct server session-creation endpoint, rotates/revokes the current cookie-bound session, clears local view/query/trace/copy state, and navigates to the corresponding route family. A client-side route change cannot reuse or promote the previous session. The rehearsed physician cockpit uses a separate browser profile/context from the sequential public → patient flow so different roles never compete for one same-origin cookie.
 
 ## Patient dashboard
 
@@ -135,7 +144,7 @@ Use a desktop-first graphite workspace for Dr. Maya Chen with three panes:
 
 ```text
 ┌ Tomorrow / Exceptions ┐ ┌ Ready-visit workspace ┐ ┌ Evidence inspector ┐
-│ 9:30  Maria Lopez  ✓  │ │ Appointment            │ │ Source timestamps   │
+│ 10:30 Maria Lopez  ✓  │ │ Appointment            │ │ Source timestamps   │
 │ Exceptions (0)        │ │ Intake                 │ │ Provenance          │
 │ +1 after safety replay│ │ Coverage               │ │ Policy decision     │
 └───────────────────────┘ └────────────────────────┘ └─────────────────────┘
@@ -182,7 +191,7 @@ Make exceptions a first-class queue. Each row shows:
 - reason automation stopped;
 - one clear next action.
 
-Initial categories are identity, scheduling, intake, coverage, clinical-language handoff, and provider failure. Do not display clinical urgency classifications because VibeDoc is not performing triage. A symptom-bearing message displays `Clinical content received — not assessed`, creates a `requested`/unacknowledged Task owned by the configured clinical-review queue, shows neutral handoff copy, and promises no response time beyond published service hours. Only an authorized human action may transition it to `accepted`.
+Initial categories are identity, scheduling, intake, coverage, clinical-language handoff, and provider failure. Do not display clinical urgency classifications because VibeDoc is not performing triage. A symptom-bearing or mixed message displays `Clinical content received — not assessed`, the fixed non-personalized emergency/general-clinical safety copy from `AGENTS.md`, creates a `requested`/unacknowledged Task owned by the configured clinical-review queue, and promises no response or review time. Only an authorized human action may transition it to `accepted`.
 
 The detail view shows what happened, the rule that stopped the workflow, exact sources, safe actions, FHIR Provenance, and a separately labeled sanitized application security event. Never imply that the application event is Medplum access audit.
 
@@ -243,6 +252,22 @@ Both surfaces share the logo, Ready Visit Rail, status vocabulary, and source/pr
 
 Generated palette explorations live in `design/variants/`. No palette is implementation-approved until the user selects one or requests a blend.
 
+## UI module and test boundary
+
+The UI lane consumes frozen view models and commands. It never imports Medplum/provider SDKs or derives Ready, permissions, payer meaning, Task lifecycle, or mutation policy. Page-shell tests are written before components and run against deterministic view-model fixtures.
+
+```text
+src/ui/shells/public-access/**
+src/ui/shells/demo-access/**
+src/ui/shells/patient-workspace/**
+src/ui/shells/physician-cockpit/**
+src/ui/components/**
+src/ui/fixtures/**       # presentation builders derived from root-owned canonical fixtures
+src/ui/__tests__/**
+```
+
+The first RED suite covers shell routing/session replacement, `Needs attention -> Ready`, compact trace expansion/update, uncertain-identity no-PHI state, provider fallback labels, keyboard navigation, focus preservation, reduced motion, and accessible status text. Color snapshot tests begin only after palette approval; structural and semantic token names may be frozen earlier without concrete color values.
+
 ## Accessibility and privacy
 
 - WCAG AA contrast
@@ -275,12 +300,12 @@ Generated palette explorations live in `design/variants/`. No palette is impleme
 
 ## Three-minute UI storyboard
 
-1. **0:00–0:15:** Landing page and Ready Visit Rail establish the promise.
+1. **0:00–0:15:** Start on the public landing page and establish the promise. Keep the physician cockpit pre-opened in a separate browser profile/context but unseen until the Ready reveal.
 2. **0:15–0:55:** Synthetic patient talks or types; the assistant discloses automation, offers two policy-approved slots, books one, then expands one sanitized `Book appointment` trace row for 5–8 seconds before closing it.
-3. **0:55–1:15:** Synthetic Demo Access opens the patient dashboard. The insurance member ID is missing, eligibility is `Not checked`, and the rail shows Needs attention.
+3. **0:55–1:15:** Synthetic Demo Access creates a new patient-demo session and opens the patient workspace. The insurance member ID is missing, eligibility transaction is `Not run`, and the rail shows Needs attention.
 4. **1:15–1:40:** The in-app follow-up requests the synthetic member ID; the patient supplies it, eligibility runs, the same Task completes, and the rail advances to Ready.
-5. **1:40–2:20:** Switch to the dark physician cockpit; show the Ready visit and Medplum evidence pane.
-6. **2:20–2:40:** An uncertain-identity replay reveals no information and creates one new `requested`/unacknowledged exception for the separate session.
-7. **2:40–3:00:** Return to the cockpit, show the new exception count and explicit `Acknowledge` action, then expand the Ready visit evidence pane to show `Appointment`, `QuestionnaireResponse`, `Coverage`, `CoverageEligibilityRequest`, `CoverageEligibilityResponse`, completed `Task`, `CommunicationRequest`, delivered `Communication`, and `Provenance`.
+5. **1:40–2:20:** Return to the separately session-bound physician tab; show the Ready visit and Medplum evidence pane.
+6. **2:20–2:40:** In the public tab, replay an uncertain-identity request. It reveals no information and creates one new `requested`/unacknowledged exception for that separate session.
+7. **2:40–3:00:** Return to the physician cockpit, show the new exception count and explicit `Acknowledge` action, then expand the Ready visit evidence pane to show `Appointment`, `QuestionnaireResponse`, `Coverage`, `CoverageEligibilityRequest`, `CoverageEligibilityResponse`, completed `Task`, `CommunicationRequest`, delivered `Communication`, and `Provenance`.
 
 Rehearse with the live trace stream unavailable: the same sequence uses labeled deterministic trace fixtures and still completes under three minutes.

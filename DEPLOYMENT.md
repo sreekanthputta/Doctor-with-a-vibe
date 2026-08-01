@@ -47,6 +47,8 @@ The committed `package.json` must make those exact commands work locally before 
 
 Store secrets only as Railway service variables. Commit names/placeholders in `.env.example`, never values.
 
+Any credential pasted into chat, logs, screenshots, tickets, or other non-secret channels is treated as exposed regardless of stated expiry. Rotate/revoke it before use. Local secrets belong only in ignored `.env` files or an approved secret manager; never in Markdown, Git history, tests, fixtures, trace output, browser storage, or build-time public variables.
+
 Required or feature-gated variables:
 
 ```text
@@ -90,6 +92,14 @@ Before a deployment may be called Ready:
 - no secret appears in the browser bundle, response, trace, URL, or logs;
 - a Railway `SIGTERM` immediately after Medplum commit reconciles to exactly one resource graph and version-specific Provenance, without a false failure or duplicate retry;
 - demo seed/reset is not exposed as a public production route.
+
+## Test-first implementation
+
+Railway configuration is root/integrator-owned. Before creating the real server, write failing integration tests for injected `PORT`, `/health`, SPA deep-link fallback, server-only environment rejection, and graceful shutdown. Then implement the smallest single-process server that makes them green.
+
+The highest-value lifecycle test dispatches a synthetic Medplum mutation, simulates commit followed by response loss and `SIGTERM`, restarts the application, and verifies reconciliation by idempotency identifier to exactly one graph and version-specific Provenance. A separate browser test switches public → patient → physician → patient contexts with colliding trace IDs and proves no prior output remains rendered, expanded, cached, or copyable.
+
+No Railway deployment is declared successful merely because the build starts. The same committed `npm run build`/`npm run start` path must pass locally, then through the deployed URL. Optional providers remain disabled for the first smoke test.
 
 ## Official Railway references
 

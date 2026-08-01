@@ -82,3 +82,23 @@ Decision: compact function rows appear beneath the initiating assistant message 
 
 Status: accepted
 Decision: preserve the patient/physician information architecture and interaction hierarchy, but do not implement the earlier ivory/sage/teal palette. Generate and compare explicit visual directions under `design/variants/`; freeze global color tokens only after user approval or an instructed blend.
+
+## D-016 — Four page shells, contextual detail
+
+Status: accepted
+Decision: the MVP has four page shells: `/` public access with embedded front-desk conversation, `/demo` neutral Synthetic Demo Access, `/patient/*` patient workspace, and `/physician/*` physician cockpit. Intake, appointment, coverage, exception, trace, FHIR resource, and Provenance detail remain nested panels, drawers, or client routes inside the owning shell. Trust-domain transitions always issue a new server-bound session.
+
+## D-017 — Test-first implementation
+
+Status: accepted
+Decision: every behavioral task follows recorded RED → GREEN → REFACTOR. Tests are written before implementation; writers may not weaken tests to pass. Vitest covers unit/contract/component behavior and Playwright covers the critical browser path. Live-provider checks are optional and environment-gated; fixture tests always run.
+
+## D-018 — Three non-overlapping writer lanes
+
+Status: accepted
+Decision: after integrator Gate 0 freezes contracts, scripts, fixtures, route shells, and ownership, run at most three concurrent writers: domain/workflow, FHIR/data, and UI. Writers own disjoint source and test paths. The root integrator alone owns dependencies, lockfiles, contracts, app/server composition, cross-lane tests, Railway configuration, commits, and merges.
+
+## D-019 — Voice revocation is enforced by VibeDoc
+
+Status: accepted
+Decision: voice consent creates an application capability distinct from the role session. Revocation immediately invalidates that capability, closes the known provider/media session, denies new provider-token issuance, and rejects late or replayed tool events while typed administrative access continues. An already issued Deepgram token is allowed to expire under its provider TTL; VibeDoc does not claim provider-side instant revocation without live conformance evidence, and no provider token carries PHI or durable mutation authority.

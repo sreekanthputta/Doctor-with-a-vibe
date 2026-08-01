@@ -1,214 +1,319 @@
-# VibeDoc Multi-Agent Build Plan
+# VibeDoc Parallel Test-First Build Plan
 
-> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, `CLINIC.md`, and `ARCHITECTURE.md`.
+> Normative priority: subordinate to `AGENTS.md`, `HACKATHON.md`, `CLINIC.md`, and `ARCHITECTURE.md`; paired with `TEST_PLAN.md`.
 
-## ECC-derived execution model
+## Execution model
 
-ECC was inspected at commit `e4e4163101f162881e628f300a9ca4e6a940bcea` (July 29, 2026). Adopt these patterns:
+ECC was inspected at commit `e4e4163101f162881e628f300a9ca4e6a940bcea` (July 29, 2026). VibeDoc adopts its useful implementation discipline:
 
-- plan and contracts live in the repository, not only in chat;
-- build one thin end-to-end slice before feature breadth;
-- map dependencies and file ownership before parallel work;
-- one integrator owns shared contracts, composition, dependency files, and merges;
-- writers receive outcome, owned paths, forbidden paths, acceptance tests, and handoff format;
-- reviewers are fresh-context and read-only;
-- integrate every 60–90 minutes;
-- verify tests, diff, security, failure states, and demo before declaring done.
+- plan and contracts live in the repository;
+- build one thin vertical slice before breadth;
+- freeze dependencies, schemas, fixtures, routes, tests, and ownership before writers start;
+- one integrator owns shared composition and merges;
+- concurrent writers use exclusive paths and isolated worktrees;
+- every behavioral task records RED → GREEN → REFACTOR evidence;
+- integrate green change sets every 60–90 minutes;
+- fresh-context reviewers report evidence and never edit.
 
-Do not copy ECC's large catalog of generic agents/skills, legacy Codex configuration, hook/control-plane machinery, blanket coverage targets, or ceremony unrelated to this hackathon.
+Do not copy ECC's generic agent catalog, control-plane/hooks, legacy Codex schema, blanket coverage target, or unrelated ceremony.
 
-## Build DAG
-
-```text
-[0 scaffold + scripts + env example + Railway contract]
-                |
-[1 freeze schemas + fixture + stable IDs + trace contract + approved tokens]
-       /              |                  \
-[2 domain/policy] [3 FHIR/data] [4 UI from view-model fixture]
-       \              |                  /
-        [5 fixture end-to-end integration]
-                    |
-      [6 live Medplum + reset/idempotency]
-                    |
- [7 Stedi adapter]       [8 Deepgram adapter]
-          \                /
-       [9 safety/race/outage/E2E]
-                    |
-         [10 reviewer council + fixes]
-                    |
-          [11 freeze, rehearse, record]
-```
-
-Steps 7 and 8 are independent and optional. They never block the typed fixture path.
-
-## Gate 0: integrator-only contract freeze
-
-Before parallel writers:
-
-1. Scaffold one strict-TypeScript React application with minimal server routes.
-2. Add scripts: `dev`, `typecheck`, `lint`, `test`, `build`, `demo:seed`, `demo:reset`, and one critical browser test.
-3. Create `.env.example` with placeholder names and server-only environment validation.
-4. Add one Railway service contract: `npm run build`, `npm run start`, injected `PORT`, `/health`, and graceful `SIGTERM` handling.
-5. Freeze runtime and sanitized function-trace schemas from `ARCHITECTURE.md` and `TRACING.md`.
-6. Freeze VibeDoc, fictional family physician Dr. Maya Chen, adult patient Maria Lopez (`maria-demo`), annual-wellness scenario, missing synthetic insurance member ID, eligibility fixture, stable resource identifiers, and reset manifest.
-7. Freeze route shells from `UI.md`; freeze color tokens only after a generated direction is approved.
-8. Freeze the Medplum scheduling seed constraints and eligibility/QuestionnaireResponse mappings from `ARCHITECTURE.md`.
-
-`demo:seed` and `demo:reset` must target only the namespaced synthetic manifest, require an explicit development/admin context, and never be exposed as public production routes.
-
-Only the root/integrator edits package manifests/lockfiles, shared contracts, route composition, global styles/tokens, and CI.
-
-## Parallel Wave 1
-
-### Lane A — domain/workflow builder
-
-Owned paths:
+## Dependency DAG
 
 ```text
-src/domain/**
-src/domain/**/*.test.*
+Gate 0 — root scaffold + test harness + frozen contracts/fixtures/routes
+                              |
+           +------------------+------------------+
+           |                  |                  |
+           v                  v                  v
+Wave 1 A: domain       Wave 1 B: FHIR      Wave 1 C: UI
+tests -> behavior      tests -> mappers     tests -> shells
+           |                  |                  |
+           +------------------+------------------+
+                              |
+                    root fixture integration
+                              |
+           +------------------+------------------+
+           |                  |                  |
+           v                  v                  v
+Wave 2 A: Deepgram    Wave 2 B: Medplum    Wave 2 C: Stedi
+optional provider      live conformance      optional provider
+           +------------------+------------------+
+                              |
+        root trace/SSE + sessions + Railway + E2E + reviewers
+                              |
+                      freeze and rehearse
 ```
+
+Deepgram and Stedi are optional. The deterministic typed fixture path cannot depend on either. Live trace transport cannot block the Ready flow; deterministic trace fixtures remain available.
+
+## Gate 0A — minimum parallelization freeze
+
+Before spawning implementation writers, the root completes and commits only the shared minimum needed for independent Wave 1 work:
+
+1. Scaffold one strict-TypeScript React application with a minimal Node server and one Railway start path.
+2. Lock package versions and configure Vitest, React Testing Library, `user-event`, Playwright, ESLint, TypeScript, and build tooling.
+3. Add scripts required by writers: `dev`, `start`, `typecheck`, `lint`, `test`, `test:unit`, and `build`. `start` serves the initial built shell and a minimal `/health`; sessions, SSE, reconciliation, and full shutdown behavior remain Gate 0B.
+4. Freeze only the Wave 1 Zod schemas and inferred types in `src/contracts/**`: administrative intents, identity decision, workflow events/states, domain/FHIR commands, provider ports used by fixtures, session context, trace presentation, and Ready-visit view models.
+5. Freeze the immutable root fixture in `src/test/fixtures/**` from `TEST_PLAN.md`.
+7. Freeze the four shells: `/`, `/demo`, `/patient/*`, and `/physician/*`; no patient/resource identifiers in URLs.
+8. Freeze the conservative `post-commit-versioned` MVP Provenance mode, explicit identifiers, Task profiles, Questionnaire canonical/linkIds/version rules, eligibility transaction state, and an adapter-independent cleanup contract. Hosted `$book`/identifier/returned-ref behavior is verified at the FHIR live gate before OP-202, not before Wave 1.
+9. Freeze layout/spacing/typography roles, semantic token names, and component states. Concrete color values and visual snapshots wait for user palette approval.
+10. Add the minimum positive/negative contract tests needed by Wave 1.
+11. Freeze writer tasks, exclusive paths, worktrees, branch names, and handoff directories.
+
+The reset seed includes practice configuration, payer, physician/role, service, schedule, two slots, Questionnaire, and policies. It does not pre-create Maria or the workflow graph. Maria's public request creates the Patient and later resources with stable business identifiers. `demo:seed`/`demo:reset` require explicit development/admin context and are never public production routes.
+
+Gate 0A is not complete until root creates and commits `scripts/gate-0a.sh` plus `npm run gate:0a`. The script must be non-interactive and reproducible:
+
+```text
+npm ci
+npm run typecheck
+npm run lint
+npm test -- src/contracts
+npm run build
+start `npm run start` with PORT=43117
+poll http://127.0.0.1:43117/health for at most 30 seconds
+require HTTP 200
+always terminate the spawned process through an EXIT/INT/TERM trap
+```
+
+The script rejects a dirty tree, occupied test port, missing lockfile, or leaked child process and writes no secret-bearing output. Root runs it from a temporary clean clone of the Gate 0A commit and records exit `0` in the Gate 0 handoff. Root then creates sibling worktrees—not nested directories—with explicit commands equivalent to:
+
+```bash
+git worktree add ../vibedoc-domain -b lane/domain <gate-0a-commit>
+git worktree add ../vibedoc-fhir -b lane/fhir <gate-0a-commit>
+git worktree add ../vibedoc-ui -b lane/ui <gate-0a-commit>
+```
+
+Root runs `npm run gate:0a` sequentially in each worktree before assignment, using the same bounded port/cleanup behavior. Branch/path existence stops with instructions; the script never deletes an existing branch or directory. Writers do not wait for sessions, SSE, full Railway shutdown/reconciliation, hosted Medplum, optional-provider schemas, or a completed browser test.
+
+## Gate 0B — root work concurrent with Wave 1
+
+While writers implement their owned modules, root adds the remaining shared runtime in test-first increments:
+
+- integration/E2E, seed/reset, and remaining Railway scripts/behavior;
+- `.env.example`, server-only validation, `railway.toml`, injected `PORT`, `/health`, SPA fallback, and `SIGTERM` behavior;
+- public/patient/physician session gateway and tool matrices;
+- server trace projection schemas, store, snapshot, SSE, redaction, and reconciliation;
+- security-event schemas, integration harness, secret scan, and failing Playwright critical path;
+- optional-provider contracts only when their entry gate is reached.
+
+Gate 0B may not mutate a frozen Wave 1 contract silently. A required change pauses only affected lanes, is committed/versioned by root, and is adopted by writers at a green boundary with an explicit handoff note.
+
+## Worktree strategy
+
+Intentional red tests must not contaminate other agents. After the Gate 0A commit, root creates three isolated sibling worktrees/branches:
+
+```text
+../vibedoc-domain   branch lane/domain
+../vibedoc-fhir     branch lane/fhir
+../vibedoc-ui       branch lane/ui
+```
+
+Writers may commit only green bounded changes in their worktree. They never merge, rebase shared contracts, or push `main`. Root reviews and merges/cherry-picks explicit green commits into `main`, runs the combined gates, and resolves shared conflicts. In a shared-tree fallback, only one writer may be in an intentional RED phase at a time; isolated worktrees are the default.
+
+## Frozen ownership
+
+| Owner | Owned paths | Forbidden shared paths |
+| --- | --- | --- |
+| Root integrator | `src/contracts/**`, `src/test/fixtures/**`, `src/app/**`, `src/server/**`, initial `src/adapters/**`, `src/styles/**`, `tests/integration/**`, `tests/e2e/**`, `scripts/**`, configs, package/lock, Railway | writer-owned paths except explicit integration fixes after handoff |
+| Lane A — domain | `src/domain/**`, `handoffs/domain/**` | contracts, fixtures, FHIR, UI, adapters/providers, server/app/styles, integration/E2E, configs/package/lock |
+| Lane B — FHIR | `src/fhir/**`, `src/demo/seed/**`, `handoffs/fhir/**` | contracts, fixtures, domain, UI, adapters/providers, server/app/styles, integration/E2E, configs/package/lock |
+| Lane C — UI | `src/ui/**`, `handoffs/ui/**` | contracts, root fixtures, domain, FHIR, adapters/providers, server/app/router, global styles/tokens, integration/E2E, configs/package/lock |
+
+Cross-lane imports use only public contract exports. Writers request contract changes from root and continue independent work; they never silently edit a shared schema.
+
+## Wave 1 task cards
+
+### OP-101 — Domain/workflow lane
 
 Outcome:
 
-- pure state reducer;
-- annual-wellness practice policy;
-- identity gate;
-- deterministic clinical-language stop;
-- closed administrative-intent grammar with default-deny handling;
-- insurance-member-ID completeness rule;
-- idempotent Task commands;
-- Ready derivation.
+- closed administrative grammar and negative corpus behavior;
+- pure identity/privacy and clinical-language stop gates;
+- annual-wellness scheduling policy;
+- pure workflow reducer;
+- member-ID completeness and Task command planning;
+- Ready derivation and active-exception count;
+- idempotent command planning and human-only acknowledgment rule.
 
-Forbidden: React, provider SDKs, direct Medplum calls, package files, shared contract edits.
+Acceptance:
 
-### Lane B — FHIR/data builder
+- the exact stage request maps to annual-wellness intent;
+- happy path reaches `needs-attention`, then `ready` after ordered evidence;
+- every open required Task prevents Ready; completed history does not increment active exceptions;
+- uncertain identity binds no patient, reveals no PHI, and emits exactly one owned requested exception command;
+- exact/parallel Maria requests follow the tri-state identity contract and conditionally create one workflow; client identifiers and near matches stop;
+- unmatched, misspelled, negated, euphemistic, and mixed clinical/administrative inputs issue no appointment mutation;
+- every clinical/mixed stop returns the exact fixed safety copy without classification or personalization;
+- repeated events create no duplicate command;
+- automated identity cannot acknowledge an exception.
 
-Owned paths:
+Verification:
 
-```text
-src/fhir/**
-src/demo/seed/**
-src/fhir/**/*.test.*
+```bash
+npm test -- src/domain
+npm run typecheck
+npm run lint
 ```
+
+### OP-201 — FHIR/data lane
 
 Outcome:
 
-- seed/reset manifest;
-- resource mappings from `ARCHITECTURE.md`;
+- pure FHIR resource mappers;
+- fixture scheduling repository and explicit `SlotConflict`;
+- reset/seed manifest implementation;
 - centralized allowlisted mutation service;
-- version/idempotency behavior;
-- scheduling fixture and Medplum implementation;
-- one-actor/timezone/SchedulingParameters/service-reference seed conformance;
-- Task, CommunicationRequest/Communication, eligibility projection, QuestionnaireResponse lifecycle, and Provenance tests.
+- Patient/Coverage/QuestionnaireResponse mappings;
+- Task and CommunicationRequest/Communication lifecycle;
+- CoverageEligibilityRequest/Response projection;
+- version-specific Provenance;
+- idempotency/version and response-loss reconciliation.
 
-Forbidden: UI, Deepgram/Stedi/telephony SDKs, package files, shared contract edits. Medplum libraries are allowed inside this lane's FHIR boundary.
+Acceptance:
 
-### Lane C — UI builder
+- mappers validate as FHIR R4 and use stable business identifiers;
+- `QuestionnaireResponse` stays `in-progress` until required answers, including the synthetic member ID, validate;
+- eligibility adapter records zero calls before member ID and exactly one after; incomplete/malformed persistence keeps the Task open and Ready false;
+- absent payer fields remain `not-returned`/`not-checked`;
+- member-ID resolution updates Coverage, records eligibility evidence, completes the same Task, and then permits Ready;
+- preview is not delivered Communication;
+- competing booking cannot double-book;
+- commit-response loss reconciles before retry;
+- reset plus two seeds leaves one exact linked graph and touches no unrelated resource;
+- all writes cross the centralized allowlist.
+- frozen Task profiles, Questionnaire canonical/version/source/author, eligibility omission projection, `$book` cleanup refs, and selected Provenance mode pass conformance tests.
 
-Owned paths:
+Verification:
 
-```text
-src/ui/**
-src/ui/**/*.test.*
+```bash
+npm test -- src/fhir
+npm run typecheck
+npm run lint
 ```
+
+### OP-301 — Fixture-driven UI lane
 
 Outcome:
 
-- warm patient landing/conversation/dashboard;
-- Synthetic Demo Access banner/persona;
-- Ready Visit Rail including Needs attention;
-- dark physician Tomorrow/Exceptions/evidence cockpit;
-- compact expandable function rows with running/completed/failed fixture states;
-- loading, empty, stopped, stale, retry, live/prerecorded/fixture labels;
-- keyboard and accessibility baseline.
+- `PublicAccessShell` with embedded front-desk conversation;
+- neutral `SyntheticDemoAccessShell`;
+- `PatientWorkspaceShell` with internal appointment/intake/coverage/message panels;
+- `PhysicianCockpitShell` with Tomorrow, Exceptions, visit workspace, and evidence drawer;
+- Ready Visit Rail and exception inbox;
+- compact expandable trace rows with updating fixture states;
+- loading, empty, stopped, stale, forbidden, retry, provider-outage, and fixture/live states;
+- keyboard and accessibility behavior.
 
-The UI consumes frozen `ReadyVisitVM` fixtures. It contains no FHIR/provider calls or business-state derivation.
+Acceptance:
 
-### Root/integrator lane
+- all four shells render frozen view models;
+- `Needs attention` never renders as Ready;
+- trace request/response updates one row and shows only the supplied sanitized projection;
+- replacing session/role/persona clears trace, cache, expansion, and copy state;
+- patient UI exposes no physician action or internal resource ID;
+- next appointment is suggested but never silently opened for write/recording;
+- uncertain exception shows human owner, due time, and `requested · unacknowledged`;
+- loading/error/empty/401/403 render no stale prior data;
+- `J/K`, `E`, `Enter`, command palette, focus return, ARIA-live, reduced motion, target size, and non-color status cues work.
 
-Owned paths:
+The lane may implement structural CSS through root-frozen semantic tokens. Concrete palette values and visual regression baselines wait for the user's A/B/C/blend decision.
 
-```text
-package.json and lockfile
-shared contracts
-src/adapters/**
-src/server/**
-app/router composition
-integration/e2e tests
-demo script
+Verification:
+
+```bash
+npm test -- src/ui
+npm run typecheck
+npm run lint
 ```
 
-Outcome:
+## Root/integrator lane during Wave 1
 
-- typed deterministic conversation adapter;
-- provider interfaces/fixtures;
-- server token/tool boundary;
-- Railway start/health/shutdown contract and sanitized local/SSE trace transport;
-- role-bound session matrix, consent-gated token issuance, and sanitized security-event sink;
-- integration of lanes into the vertical slice;
-- optional Stedi and Deepgram adapters after the fixture slice is green.
+Root works only on shared composition and tests that do not overlap writer paths:
 
-## Task-card contract
+- contract/fixture fixes requested by lanes;
+- deterministic scripted conversation and eligibility adapters;
+- router and four-shell composition;
+- role/session/tool gateway;
+- sanitized trace store/snapshot/SSE boundary;
+- Railway server and environment contract;
+- integration/E2E harness and secret scan.
 
-Every delegated task must specify:
+Root does not pre-implement a writer's behavior. Cross-lane integration begins only from green handoffs.
+
+## Required Wave 2 reassignment
+
+After Wave 1 handoffs are merged, all capacity remains on the required deployed proof:
+
+| Task | Temporary owner | Owned paths/outcome | Dependency |
+| --- | --- | --- | --- |
+| OP-102 workflow robustness | former Lane A | additional negative/idempotency/property cases in `src/domain/**` | OP-101 merged |
+| OP-202 hosted Medplum transport/conformance | former Lane B | `src/fhir/medplum/**`, `handoffs/medplum/**` | OP-201 merged |
+| OP-302 demo UI/accessibility polish | former Lane C | remaining state/accessibility behavior in `src/ui/**` | OP-301 merged |
+
+The root owns server/session/trace/Railway/E2E composition concurrently. Hosted Medplum is required.
+
+OP-202 begins with the FHIR live gate: a synthetic hosted test for conditional Patient create, `$book` identifier/returned Appointment+Slot references, safe cleanup, and post-commit version-specific Provenance. It records the observed behavior before implementing the transport. Failure blocks OP-202, not Wave 1 domain/FHIR/UI fixture work.
+
+### Optional-provider entry gate
+
+Deepgram (`src/providers/deepgram/**`) and Stedi (`src/providers/stedi/**`) may enter `in_progress` only after G0–G6 are green and one complete rehearsal finishes under three minutes. Root then explicitly reassigns a freed lane and freezes its provider contract. If either threatens the feature-cut deadline, retain the labeled fixture and stop provider work.
+
+## Root integration tasks
+
+| ID | Result | Dependencies |
+| --- | --- | --- |
+| OP-001 | scaffold, scripts, environment, Railway, test harness | none |
+| OP-002 | contracts, immutable fixtures, routes, sessions, ownership frozen | OP-001 |
+| OP-003 | deterministic typed fixture slice including fixture traces | OP-101, OP-201, OP-301 |
+| OP-004 | role/session gateway, trace redaction and deterministic security evidence | OP-003 |
+| OP-005 | live Medplum graph, seed/reset, idempotency, provenance | OP-202 |
+| OP-006 | sanitized live trace SSE; fixture fallback remains | OP-003 |
+| OP-007 | Railway lifecycle, health, deep links, shutdown reconciliation | OP-003, OP-005 |
+| OP-501 | reviewer council and fixes | OP-004, OP-005, OP-007 |
+| OP-502 | freeze, three rehearsals, backup recording | OP-501 |
+
+## Task handoff contract
+
+Every task creates `handoffs/<lane>/OP-###.md` containing:
 
 ```yaml
 id: OP-###
 outcome: one user-visible or contract-visible result
-owner: agent/lane
-state: backlog | ready | running | review | blocked | merged
+owner: lane
+state: review
 dependencies: []
 owned_paths: []
 forbidden_paths: []
 acceptance: []
 verification: []
-merge_gate: checks required before integration
-handoff: changed files, commands/results, screenshots for UI, remaining risks
+merge_gate: []
 ```
 
-An agent must not expand its owned paths. Missing shared contracts are requested from the integrator; the lane continues against a local fixture rather than silently changing global types.
+And records:
 
-## First-day board
+- files changed;
+- RED command, intended assertion, and observed failure;
+- GREEN commands and results;
+- refactor performed;
+- manual verification and UI screenshot when applicable;
+- assumptions, remaining risks, and requested shared-contract changes.
 
-| ID | Task | Owner | Dependencies | Acceptance |
-| --- | --- | --- | --- | --- |
-| OP-001 | Runnable scaffold/scripts/env example | Integrator | none | dev/typecheck/test/build commands exist |
-| OP-002 | Freeze schemas, fixture, IDs, trace contract, approved tokens | Integrator | OP-001 | all three lanes compile against contracts |
-| OP-005 | Railway runtime and health contract | Integrator | OP-001 | one service listens on `PORT`, serves SPA/API, passes `/health`, and drains safely |
-| OP-006 | Sanitized live function-trace transport | Integrator | OP-003 | local/SSE updates merge by ID and session/role/subject allowlists prevent leaks; failure falls back to fixture trace state |
-| OP-101 | Workflow reducer and safety/readiness rules | Domain | OP-002 | pure tests cover happy, missing-field, identity-stop |
-| OP-201 | Seed/reset and FHIR mutation service | FHIR | OP-002 | rerun produces no duplicates |
-| OP-301 | Patient + physician UI and trace rows against fixtures | UI | OP-002 | all states render, trace expands/updates, and keyboard path works |
-| OP-003 | Fixture vertical-slice integration | Integrator | OP-101/201/301 | typed request reaches completed Task and Ready cockpit with deterministic fixture trace rows; no SSE dependency |
-| OP-202 | Live Medplum reads/writes and scheduling adapter | FHIR | OP-003 | actual graph visible; slot conflict handled |
-| OP-004 | Critical browser path and security evidence | Integrator | OP-202 | exact screen sequence, sanitized application audit event, and reset-through-safety replay pass |
-| OP-401 | Stedi approved test/fixture adapter | Integrator | OP-003 | same normalized result and visible source label |
-| OP-402 | Deepgram live adapter/token route | Integrator | OP-003 | voice and InjectUser map to same intent; failure bypass works |
-| OP-501 | Reviewer council and fixes | Reviewers/root | OP-004 | no unresolved HIGH/CRITICAL |
-| OP-502 | Freeze/rehearse/backup recording | Root | OP-501 | three sub-three-minute runs from reset |
+A handoff with a red owned suite, unrelated change, missing evidence, or out-of-lane file is rejected.
 
 ## Integration cadence
 
-- T+0:30: scaffold and contracts frozen
-- Every 60–90 minutes: each writer hands off one green bounded change set; root integrates immediately
-- T+2:30: fixture path renders `Needs attention -> Ready`
-- T+4:00: live Medplum graph, seed/reset, eligibility fixture, provenance
-- T+5:15: safety replay, slot race, outage fallback, critical browser test
-- T+6:15: feature freeze; only HIGH/CRITICAL fixes and demo polish
+Progress is gate-based, not promised by an unmeasured hour estimate:
 
-No lane carries unintegrated work longer than 90 minutes. In a shared working tree, builders do not commit: they report exact changed paths and checks, and the integrator stages only those paths after verifying the combined tree. Use isolated worktrees when lanes need independent commits, broad edits, or dependency changes; the integrator alone reconciles shared contracts and lockfiles.
+1. Run the committed `npm run gate:0a` from a clean clone, record exit/duration, create sibling worktrees, and run it sequentially in each.
+2. Create three worktrees only after the Gate 0A exit check passes.
+3. Every 60–90 minutes, each writer hands off a bounded green commit; root integrates immediately.
+4. Do not begin required Wave 2 until the combined deterministic fixture slice is green.
+5. Do not begin optional providers until G0–G6 and one full rehearsal are green.
+6. Set a hard feature-cut deadline at least two hours before submission; after it, only CRITICAL/HIGH remediation, deterministic-demo fixes, rehearsal, and recording are allowed.
 
-## Quality gates
-
-Per bounded handoff:
-
-- tests for affected pure behavior;
-- typecheck for owned area;
-- clean diff and no unrelated files;
-- UI screenshot/manual state verification when applicable.
-
-At every integration cut:
+No worktree carries unintegrated work longer than 90 minutes. At every integration cut root runs:
 
 ```bash
 npm run typecheck
@@ -217,66 +322,45 @@ npm test
 npm run build
 ```
 
-Before freeze:
+## Merge gates
 
-- malformed intent/provider/tool output rejected;
-- wrong/uncertain identity reveals no PHI;
-- symptom-bearing input produces no classification, reassurance, or disposition;
-- unmatched or mixed clinical/administrative input creates exactly one owned `requested` Task and no appointment mutation;
-- only the configured human role can transition an exception from `requested` to `accepted`;
-- slot race cannot double-book;
-- missing insurance member ID creates exactly one Task; supplying it records eligibility evidence, completes the Task, and makes Ready;
-- every open required Task status makes Ready false, while completed Task history does not increment the exception badge;
-- absent payer fields remain not-returned/not-checked;
-- eligibility request/response mandatory fields, payer organization, request reference, coverage reference, and source identifier validate;
-- QuestionnaireResponse remains in-progress until required answers validate and preserves subject/source/author/authored;
-- preview-only reminders cannot create completed Communication; actual in-app delivery records the event;
-- `$find -> $book` validates the schedule/slot/appointment graph and competing booking maps to `SlotConflict`;
-- patient route cannot invoke clinician/billing tools;
-- public-booking, patient-demo, and physician-demo sessions cannot reuse or promote one another's role or tool allowlist;
-- the verbatim stage sentence maps to annual-wellness intent in both scripted and live-adapter contract tests;
-- token issuance returns `403` before voice-processing acknowledgment and after decline/revoke;
-- revocation tears down active capture/WebSocket/media queues and late provider frames or unexecuted proposals cannot mutate state;
-- the visible application security event contains only event ID, timestamp, actor role, action class, decision, correlation ID, and fixture/live label and is never rendered as Provenance;
-- trace input/output pass tool- and role-specific allowlists; server-derived session/role/subject bindings reject same-role cross-session/persona access; request/response update one row; reconnect/replay causes no duplicate mutation;
-- client trace state is namespaced by server session/role/subject, clears on context replacement, and colliding IDs cannot retain, merge, expand, or copy prior-persona output;
-- secrets, headers, prompts, chain-of-thought, `thought_signature`, raw provider payloads, raw audio/transcripts, and unrestricted FHIR resources never render in a trace;
-- Railway starts from committed scripts on the injected `PORT`, `/health` passes, and shutdown prevents late tool events from mutating state;
-- only the centralized writer mutates FHIR;
-- Deepgram/Stedi/model outage completes the typed fixture path;
-- reset/rerun creates no duplicates;
-- explicit demo `Identifier.system`/`value` constants are used consistently; a documented legacy-value fixture fails closed or migrates under the integrator, and reset plus two seeds leaves exactly one linked graph;
-- commit-response-loss and `SIGTERM`-after-commit reconcile by idempotency identifier to one graph and version-specific Provenance without a false failure or duplicate retry;
-- secret scan and browser/log inspection find no credentials or PHI payloads;
-- one deterministic critical browser path passes.
+`TEST_PLAN.md` defines the detailed G0–G7 gates. Additionally:
+
+- only explicit green writer commits are integrated;
+- no dependency or lockfile change comes from a writer lane;
+- optional provider failures cannot break fixture tests;
+- UI snapshot/color approval is not required for the logic slice but must be resolved before visual freeze;
+- no unresolved CRITICAL/HIGH reviewer finding may cross a demo-critical merge;
+- accepted MEDIUM risk is written into the relevant task handoff and demo-freeze report.
 
 ## Review waves
 
-Run the existing four read-only reviewers in two waves of up to three concurrent threads:
+At contract freeze, first integrated fixture slice, and demo freeze run:
 
-1. Product impact, clinical safety, and FHIR
-2. Security/demo
+1. product-impact, clinical-safety, and FHIR reviewers in parallel;
+2. security/demo reviewer in the next available slot.
 
-Each finding requires severity, evidence, trigger, impact, and smallest fix/test. Root deduplicates and owns remediation. Reviewers never edit. Run at architecture freeze, first integrated vertical slice, and demo freeze—not on trivial changes.
+Reviewers are read-only. Each actionable finding includes severity, exact evidence, reproducible trigger/missing state, impact, and smallest fix/test. Root deduplicates and owns remediation.
 
 ## Scope cut order
 
-1. Live microphone; keep typed/prerecorded path
-2. Live Stedi; keep labeled fixture
-3. Multiple patients/visit types
-4. Encounter transcription and clinical chat
-5. Orders/referrals/prescriptions/claims
-6. Workflow builder and visible multi-agent animation
+1. Live microphone; retain typed/prerecorded input.
+2. Live Stedi; retain labeled eligibility fixture.
+3. Live trace transport; retain deterministic expandable trace fixtures.
+4. Multiple patients/visit types.
+5. Encounter transcription and clinical chat.
+6. Orders/referrals/prescriptions/claims.
+7. Workflow builder or visible multi-agent animation.
 
-Never cut the deterministic typed path, Medplum graph, safety stop, Task completion/readiness rule, provider labels, seed/reset, or rehearsed demo.
+Never cut the deterministic typed path, four-shell trust separation, Medplum graph, identity/privacy stop, Task completion/readiness invariant, exact payer vocabulary, seed/reset, Provenance, or rehearsed demo.
 
 ## Post-MVP medication evidence spike
 
-Do not start this during the administrative build. After clinical-chat prerequisites and external clinical/privacy review, run a separate benchmark spike:
+Do not start during the administrative build. After clinical-chat prerequisites and external clinical/privacy review:
 
-1. Freeze a synthetic medication-question corpus and required DailyMed sections.
-2. Implement RxNorm normalization plus direct DailyMed retrieval as the baseline.
-3. Define the validated rule/interaction provider separately; an LLM, Moss, RxNorm, and DailyMed are not substitutes.
-4. Index only public label chunks in Moss with RxCUI/product, ingredient, `setId`, version/effective time, section, and source URL.
-5. Compare required-section recall, stale-version rejection, p95 latency, token reduction, deletion/update behavior, offline/failure behavior, and citations.
-6. Adopt Moss only if it improves speed/context without lowering recall or traceability. Patient facts remain exact Medplum queries and never enter the Moss index or query.
+1. freeze a synthetic medication-question corpus and required DailyMed sections;
+2. implement RxNorm normalization plus direct DailyMed retrieval baseline;
+3. define validated rule/interaction provider separately;
+4. optionally index only public label chunks in Moss with version metadata;
+5. compare recall, stale-version rejection, p95 latency, token reduction, updates/deletion, offline/failure behavior, and citations;
+6. adopt Moss only if it improves the workflow without lowering recall or traceability; patient facts never enter Moss.

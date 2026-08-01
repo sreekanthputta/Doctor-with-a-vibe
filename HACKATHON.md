@@ -2,7 +2,7 @@
 
 > Normative priority: subordinate only to `AGENTS.md`; this file is the release and demo contract.
 
-> One call. One ready visit. One physician exception inbox.
+> One request. One ready visit. One physician exception inbox.
 
 Event: YC x Medplum Agentic Healthcare Hackathon
 
@@ -20,7 +20,7 @@ Do not pitch “replace everyone in a hospital.” Pitch:
 
 Long-term framing: **One physician runs an AI-native, virtual-first adult primary-care microclinic without dedicated administrative staff.** Do not claim that one person runs a hospital or that external laboratories, imaging facilities, pharmacies, specialists, urgent care, and emergency departments have no human teams. See `CLINIC.md`.
 
-The north star is a Cursor-like cockpit for the entire clinic. The winning one-day wedge is narrower: **one call becomes one ready visit without staff re-entering the patient's information**. See `UI.md` for the exact patient and physician surfaces.
+The north star is a Cursor-like cockpit for the entire clinic. The winning one-day wedge is narrower: **one patient request becomes one ready visit without staff re-entering the patient's information**. See `UI.md` for the exact patient and physician surfaces.
 
 ## Platform architecture
 
@@ -73,7 +73,7 @@ It demonstrates why healthcare benefits from an agent without pretending the mod
 
 ### 0:00–0:20 — The promise
 
-Show an empty “Tomorrow” queue.
+Start on the public landing page. Keep the physician cockpit pre-opened in a separate browser profile/context for the later reveal; different roles never share one cookie jar. Do not spend opening time explaining session mechanics.
 
 > “Independent doctors spend their day operating software and chasing paperwork. VibeDoc makes the routine work disappear and shows only exceptions.”
 
@@ -99,16 +99,18 @@ For reliability, deterministic typed input uses `ScriptedConversationAdapter`. L
 
 The patient enters **Synthetic Demo Access** and opens the fixed fictional persona. A typed demo username is a persona selector, not authentication, and never exposes real data. Production replaces this with a verified one-time link/code, passkey, or equivalent identity proof.
 
-The patient completes intake but has not supplied the synthetic insurance member ID required by the physician-authored demo readiness policy. VibeDoc:
+The patient submits all currently available intake answers but has not supplied the synthetic insurance member ID required by the physician-authored demo readiness policy. The `QuestionnaireResponse` remains `in-progress`. VibeDoc:
 
 - marks the `QuestionnaireResponse` as patient-reported;
 - delivers a privacy-minimal in-app follow-up message and records the actual event;
 - creates one owned administrative `Task` for the unresolved field;
-- leaves eligibility `not checked` until the required identifier exists.
+- shows eligibility transaction `Not run` until the required identifier exists.
 
-The patient supplies `AETNA-DEMO-2048`. VibeDoc updates `Coverage`, runs the deterministic labeled eligibility fixture (or live approved test adapter), stores the request/response projection, completes the same idempotent Task, and advances `Needs attention -> Ready`. A visit with any required open Task remains Needs attention.
+The patient supplies `AETNA-DEMO-2048`. VibeDoc completes the validated `QuestionnaireResponse`, updates `Coverage`, runs the deterministic labeled eligibility fixture (or live approved test adapter), stores the request/response projection, completes the same idempotent Task, and advances `Needs attention -> Ready`. A visit with any required open Task remains Needs attention.
 
 It never translates eligibility into “covered,” “in network,” “no authorization required,” or a price guarantee.
+
+Eligibility transaction state is separate from missing benefit fields. Before the member ID, no eligibility adapter is called. Ready requires a persisted linked request/response with the configured completed outcome and fixture/live source identifier. If live eligibility fails, the labeled fixture may run; if neither produces valid persisted evidence, the original Task stays open and the visit remains Needs attention. Individual fields may still display `Not returned` or `Unknown / not checked`.
 
 ### 1:45–2:25 — Physician cockpit
 
@@ -124,15 +126,15 @@ The current patient is suggested, never silently selected for a recording or wri
 
 ### 2:25–2:45 — Trust proof
 
-Replay a separate deterministic unsafe case: uncertain identity. The system stops the routine automation, reveals no PHI, provides no clinical disposition, and creates an owned `requested`/unacknowledged exception with a visible human `Acknowledge` action. This exception is not attached to the Ready patient unless identity is later resolved by an authorized human.
+Replay one deterministic unsafe case on stage: uncertain identity. The system stops the routine automation, reveals no PHI, provides no clinical disposition, and creates an owned `requested`/unacknowledged exception with a visible human `Acknowledge` action. This exception is not attached to the Ready patient unless identity is later resolved by an authorized human. The clinical-language stop fixture and fixed non-personalized safety copy remain automated acceptance evidence and a backup demo, not a second staged exception.
 
 ### 2:45–3:00 — Platform reveal
 
 Show the Medplum graph and provenance:
 
-> “Today: one call becomes one ready visit. Next: the same governed operations layer handles referral packets, result follow-up, claim status, and a clinician-reviewed encounter draft.”
+> “Today: one request becomes one ready visit. Next: the same governed operations layer handles referral packets, result follow-up, claim status, and a clinician-reviewed encounter draft.”
 
-Dashboard proof: **one routine call resolved, zero staff re-entry, one exception surfaced**. These are demo counts, not unmeasured customer savings.
+Dashboard proof: **one routine request completed, zero staff re-entry, one exception surfaced**. These are demo counts, not unmeasured customer savings.
 
 ## UI contract
 
@@ -185,7 +187,7 @@ After the front-door slice is reliable:
 4. Final speaker-attributed transcript becomes a source `DocumentReference`; raw audio retention is policy-controlled.
 5. Extraction returns a strict typed proposal, never direct FHIR writes.
 6. The physician sees a source-linked diff and accepts, edits, or rejects each item.
-7. Accepted resources and `Provenance` commit atomically with current version checks.
+7. Accepted resources use current version checks and the conservative `post-commit-versioned` Provenance mode; the UI shows committed state and lineage confirmation separately and never calls them atomic.
 
 Clinical chat is roadmap-only and is not shown in the judged demo. When built, a question such as “Can I suggest paracetamol?” may retrieve active medications, allergies, relevant history, missing data, and authoritative source links; it must not choose treatment. The physician independently reviews the basis and decides.
 
@@ -204,29 +206,33 @@ Provider secrets remain server-side. Browser voice requires a short-lived token 
 
 ## MVP acceptance criteria
 
-- One seeded synthetic patient path completes from request to ready-visit card.
+- One synthetic new-patient path creates Maria and completes from request to ready-visit card.
 - Medplum visibly stores the appointment, intake response, coverage, eligibility request/response projection, completed Task, follow-up `CommunicationRequest`, actually delivered in-app `Communication`, and Provenance.
 - The inspector separately shows one sanitized application security event (`eventId`, timestamp, actor role, action class, decision, correlation ID, fixture/live label; no payload/PHI). It is never represented as FHIR `Provenance` or claimed to be Medplum access audit.
 - Wrong or uncertain identity reveals no PHI.
 - Slot conflict retries without double-booking.
 - Missing insurance member ID creates exactly one idempotent Task; supplying it updates `Coverage`, records eligibility evidence, and completes that Task before Ready.
 - Missing payer values remain `unknown/not checked`.
+- Eligibility is never invoked before the member ID; a missing, failed, malformed, or partially persisted transaction keeps Needs attention even though individual benefit fields may be unknown.
+- Two-tab/retry Maria creation produces one Patient/workflow; near matches and forged identifiers bind no patient and create one exception.
+- Every symptom/mixed-language fixture displays the exact fixed safety copy, reveals no PHI, and performs no scheduling mutation.
+- The staged reset ends with exactly one active exception: the uncertain-identity Task. Clinical-language fixtures run in isolated tests/backup replay and do not alter the staged count.
 - All external calls have deterministic fixtures.
 - One compact booking trace expands, updates in place, and shows only a role/session/subject-authorized sanitized projection; the Ready path still completes if the live trace stream is unavailable.
 - Reset and rerun produce no duplicate resources.
 - The full story is rehearsed in under three minutes.
+- In a five-person recall check after one viewing, at least four people can state the buyer, patient request, Ready outcome, Medplum's role, and the safe identity stop.
 
 ## Build order
 
-1. Scaffold and freeze typed contracts, stable demo identifiers, route shells, trace schemas, and deterministic fixtures; freeze color tokens only after visual-direction approval.
-2. Seed one physician, service, schedule, patient fixture, questionnaire, and deterministic availability.
-3. Implement the Deepgram-independent typed patient conversation and Medplum appointment/intake graph.
-4. Add incomplete-field detection and the single exception inbox.
-5. Build the Cursor-like three-pane UI around the complete path.
-6. Add provenance, idempotency, version checks, seed/reset, and safety fixtures.
-7. Put Stedi behind its fixture adapter.
-8. Add Deepgram `InjectUserMessage`/prerecorded input, then live microphone only if the demo remains deterministic.
-9. Run the reviewer council, resolve all HIGH findings, freeze, and rehearse.
+1. Scaffold and freeze test commands, typed contracts, stable identifiers, four route shells, trace schemas, deterministic fixtures, and exclusive paths; freeze color values only after visual-direction approval.
+2. Write positive/negative contract tests and the failing critical browser skeleton.
+3. Launch isolated domain, FHIR, and fixture-driven UI worktrees. Each records RED before implementation and hands off only GREEN commits.
+4. Integrate the Deepgram-independent typed patient conversation, practice seed, Maria creation, appointment/intake graph, incomplete-field Task, Ready derivation, four shells, and fixture traces.
+5. Add hosted Medplum transport, provenance, idempotency, version checks, seed/reset, slot conflict, and response-loss reconciliation.
+6. Add server session isolation, trace redaction/SSE, Railway lifecycle, outage, and browser safety tests.
+7. Put Stedi and Deepgram behind separately owned optional adapters only after the fixture slice is green.
+8. Run the reviewer council, resolve all CRITICAL/HIGH findings, explicitly record accepted MEDIUM risks, freeze, and rehearse.
 
 ## Scope cuts
 

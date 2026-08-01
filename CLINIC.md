@@ -62,11 +62,11 @@ VibeDoc does not present itself as a hospital and does not provide or automate:
 - controlled-substance management in the demo;
 - autonomous triage, diagnosis, treatment, prescribing, ordering, or result interpretation.
 
-The public agent does not “detect red flags” or decide urgency. It accepts only the closed administrative intent grammar. Symptom-bearing, mixed, or unmatched text stops the routine workflow, displays neutral `Clinical content received — not assessed` copy, and creates one `requested` Task for the physician's configured review queue. Emergency language and after-hours copy must be published and reviewed by the clinic, a licensed clinician, and counsel; the model cannot improvise it.
+The public agent does not “detect red flags” or decide urgency. It accepts only the closed administrative intent grammar. Symptom-bearing or mixed text stops the routine workflow, displays `Clinical content received — not assessed` plus the fixed non-personalized v1 safety copy in `AGENTS.md`, and creates one `requested` Task for the physician's configured review queue. The model cannot improvise or personalize emergency language. The fixed copy and after-hours presentation require review by the clinic, a licensed clinician, and counsel before production use.
 
 ## Hackathon patient: administrative slice
 
-Maria is a fictional new patient requesting an adult annual wellness visit. The judged demo remains:
+Maria is a fictional new patient requesting an adult annual wellness visit. The reset seed does not contain her Patient resource; the public happy path creates her synthetic record with a stable business identifier. The judged demo remains:
 
 ```text
 public browser voice/type
@@ -81,6 +81,10 @@ public browser voice/type
 ```
 
 The MVP does not expose Maria's clinical chart, symptoms, medication questions, transcription, orders, referrals, or claims. Using the same fictional persona preserves continuity without pretending those features are built.
+
+The visible software is intentionally four shells: public access with embedded front-desk conversation, neutral Synthetic Demo Access, Maria's patient workspace, and Dr. Chen's physician cockpit. Appointment, intake, coverage, exception, trace, and evidence details stay within their actor shell. This customer framing cannot create additional MVP pages or workflows.
+
+Implementation uses only replayable synthetic fixtures and follows the test-first contract in `TEST_PLAN.md`. Clinic roadmap narratives may supply future test scenarios, but they cannot add a failing release requirement to the administrative slice.
 
 ## Roadmap patient: governed clinical slice
 

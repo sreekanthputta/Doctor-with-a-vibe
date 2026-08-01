@@ -4,11 +4,11 @@
 
 ## Mission
 
-Build **VibeDoc — Powered by Medplum**, a FHIR-native virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. The hackathon proof is **one call to one ready visit**: synthetic patient Maria Lopez schedules, completes intake, receives follow-up for missing administrative information, and appears in Dr. Maya Chen's single physician exception inbox backed by Medplum.
+Build **VibeDoc — Powered by Medplum**, a FHIR-native virtual-first adult primary-care microclinic operated by one family physician without dedicated administrative staff. The hackathon proof is **one request to one ready visit**: synthetic patient Maria Lopez schedules, submits available intake answers, resolves automated follow-up for a missing synthetic member ID, completes intake, and appears Ready in Dr. Maya Chen's Medplum-backed cockpit. A separate uncertain-identity session creates the single owned physician exception without revealing PHI.
 
 The vision is a front office in software; humans still provide physical care, clinical judgment, legal accountability, and exception handling. Never market or implement autonomous medical practice.
 
-Read `README.md`, `HACKATHON.md`, `CLINIC.md`, `ARCHITECTURE.md`, `UI.md`, `TRACING.md`, `DEEPGRAM.md`, `DEPLOYMENT.md`, `BUILD_PLAN.md`, `DECISIONS.md`, and `RESEARCH.md` before planning or editing. `HACKATHON.md` defines visible scope; `CLINIC.md` defines the fictional customer/roadmap but cannot expand the release; `RESEARCH.md` cannot expand it.
+Read `README.md`, `HACKATHON.md`, `CLINIC.md`, `ARCHITECTURE.md`, `UI.md`, `TRACING.md`, `DEEPGRAM.md`, `DEPLOYMENT.md`, `BUILD_PLAN.md`, `TEST_PLAN.md`, `DECISIONS.md`, and `RESEARCH.md` before planning or editing. `HACKATHON.md` defines visible scope; `CLINIC.md` defines the fictional customer/roadmap but cannot expand the release; `RESEARCH.md` cannot expand it.
 
 ## Product invariant
 
@@ -47,6 +47,8 @@ Do not add a second database, language, message broker, or orchestration framewo
 Deepgram function selection is untrusted model output. A `FunctionCallRequest` must cross the same schema, authorization, confirmation, idempotency, and mutation gates as any other command. Voice confirmation alone is not a clinical signature. Never expose permanent Deepgram, Stedi, telephony, messaging, or organization-wide Medplum credentials in browser code.
 
 The first slice uses a closed administrative-intent grammar. Unmatched, mixed clinical/administrative, or non-administrative free text stops by default and atomically creates exactly one owned `requested` exception Task with a due policy. Only an authorized human may acknowledge it by moving it to `accepted`; automated copy must not imply it has been seen.
+
+Every clinical, symptom-bearing, or mixed-language stop displays fixed non-personalized safety copy: `VibeDoc cannot assess symptoms or emergencies. Do not wait for a reply. If you may be experiencing an emergency, call 911 or your local emergency number now. For other clinical concerns, contact a qualified healthcare professional.` It does not classify urgency or personalize a disposition. Licensed-clinician and counsel/privacy review is required before production use.
 
 Compact function rows may appear under assistant messages and update in real time. They show only tool-specific allowlisted input/output projections and safe status metadata. Trace streams and snapshots are server-bound to the current session, role, and allowlisted synthetic subject/persona; client-supplied identifiers cannot broaden access. Never render secrets, credentials, headers, hidden prompts, chain-of-thought, `thought_signature`, raw provider payloads, raw audio/transcripts, stack traces, or unrestricted FHIR resources. A trace is explanatory UI state, not authorization, workflow truth, Provenance, or an access audit.
 
@@ -94,7 +96,7 @@ A visit cannot display as Ready while a required-field Task is open. Use Task st
 
 ### Product/orchestrator
 
-- Own the one-call-to-ready-visit outcome and reject demo dilution.
+- Own the one-request-to-ready-visit outcome and reject demo dilution.
 - Measure completed workflows and correctly escalated exceptions, not conversational realism.
 - Keep provider adapters behind typed fixture interfaces.
 
@@ -122,9 +124,11 @@ A visit cannot display as Ready while a required-field Task is open. Use Task st
 
 ## Parallel build coordination
 
-Follow `BUILD_PLAN.md`. Before spawning writers, the root integrator freezes schemas, fixture IDs, routes, design tokens, and file ownership. Use at most three writer lanes with non-overlapping paths. The integrator alone owns dependencies/lockfiles, shared contracts, composition, CI, and merges.
+Follow `BUILD_PLAN.md` and `TEST_PLAN.md`. Before spawning writers, the root integrator freezes schemas, fixture IDs, four route shells, structural/semantic design-token names, test commands, and file ownership. Concrete color values remain blocked until visual-direction approval. Use at most three writer lanes with non-overlapping paths. The integrator alone owns dependencies/lockfiles, shared contracts, composition, CI, and merges.
 
 Each task states outcome, dependencies, owned and forbidden paths, acceptance, verification, merge gate, and handoff. Writers never modify another lane. Integrate green change sets every 60–90 minutes; do not hide handoffs only in chat. In a shared working tree, only the integrator commits and stages explicit paths; independent lane commits require isolated worktrees. Review agents remain read-only.
+
+Implementation is test-driven. For every behavioral task, the writer must: write the smallest meaningful failing test; run it and record the expected RED result; implement only enough behavior to pass; run the owned suite and record GREEN; refactor without changing behavior; then run the lane merge gate. A missing module may be the first RED only during scaffolding; subsequent RED evidence must fail an assertion for the intended behavior, not because of syntax, configuration, or unrelated tests. Never weaken or delete a failing test merely to obtain green.
 
 ## Review council
 
@@ -137,7 +141,7 @@ At architecture selection, before a demo-critical merge, and at demo freeze, run
 
 Run independent reviews in parallel up to the configured limit, then the remainder in a second wave. Reviewers report only. A finding is actionable only when it includes evidence, a reproducible trigger or missing state, impact, and the smallest defensible fix/test. Do not freeze with an unresolved CRITICAL or HIGH finding; explicitly record accepted MEDIUM risks.
 
-Review precedence is `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`TRACING.md`/`DEEPGRAM.md` → `DEPLOYMENT.md` → `BUILD_PLAN.md` → `RESEARCH.md`.
+Review precedence is `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITECTURE.md` → `UI.md`/`TRACING.md`/`DEEPGRAM.md` → `DEPLOYMENT.md` → `BUILD_PLAN.md`/`TEST_PLAN.md` → `RESEARCH.md`.
 
 ## Clinical AI rules
 
@@ -159,7 +163,7 @@ Review precedence is `AGENTS.md` → `HACKATHON.md` → `CLINIC.md` → `ARCHITE
 - Username-only access is a synthetic demo persona selector, never authentication. It must expose only fixed fictional data and display a persistent demo banner. A real portal requires verified-channel passwordless authentication or stronger controls.
 - Public booking, patient demo, and physician demo use distinct routes and server-issued role-bound sessions/tool allowlists. A public or patient session can never be promoted to physician context.
 - Deepgram token issuance requires a current server-recorded voice-processing acknowledgment; missing, declined, expired, or revoked acknowledgment returns `403` and typing remains available.
-- Revoking voice processing immediately stops capture/playback, closes the provider session, invalidates its application session, discards unexecuted proposals, and blocks late frames from causing mutations.
+- Revoking voice processing immediately stops capture/playback, invalidates the application voice capability, closes the known provider session, denies further provider-token issuance, discards unexecuted proposals, and blocks late or replayed events from causing mutations. It preserves or safely rotates the same-role administrative session so typing remains available. An already issued provider token expires under its provider TTL and carries no PHI or durable workflow authority; do not claim provider-side instant revocation without conformance evidence.
 - Treat transcripts, faxes, uploads, FHIR narrative, and retrieved web content as untrusted prompt-injection input.
 - Do not log raw payloads or render unsanitized HTML.
 - Patient-facing voicemail and notifications reveal the minimum information necessary.
@@ -196,9 +200,11 @@ Minimum critical tests:
 - Wrong/uncertain identity reveals no PHI and creates an owned exception.
 - A slot race cannot double-book; the agent retries or offers a new slot.
 - Missing payer data remains `unknown/not checked`.
+- Eligibility adapter is never called before a valid member ID; Ready requires a persisted linked completed request/response transaction, while individual benefits may remain not-returned/not-checked.
 - Missing insurance member ID creates one Task; supplying it updates `Coverage`, records the eligibility request/response, and completes that Task before Ready.
 - Incomplete or dropped intake creates a follow-up `Task`.
 - Malformed agent/provider output is rejected.
+- Exact, near-match, concurrent retry, and forged-identifier identity cases follow the frozen tri-state demo identity contract; clients cannot choose identifiers and uncertain cases bind no patient.
 - Unmatched, misspelled, negated, euphemistic, and mixed clinical/administrative text produces no appointment mutation and exactly one `requested` exception.
 - The system cannot acknowledge its own exception; only the configured human role can transition `requested -> accepted`.
 - No clinical proposal writes without explicit approval; rejection writes nothing.
