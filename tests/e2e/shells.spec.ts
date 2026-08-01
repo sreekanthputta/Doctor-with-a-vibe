@@ -97,4 +97,37 @@ test.describe('VibeDoc four-shell demo', () => {
     expect(stateText).not.toContain('"resourceType":"Patient"');
     expect(stateText).not.toContain('"resourceType":"Appointment"');
   });
+
+  test('a second public session cannot take over an active workflow', async ({ browser }) => {
+    const ownerContext = await browser.newContext();
+    const attackerContext = await browser.newContext();
+    const owner = await ownerContext.newPage();
+    const attacker = await attackerContext.newPage();
+
+    await owner.goto('/');
+    await owner.getByLabel(/first name/i).fill('Maria');
+    await owner.getByLabel(/last name/i).fill('Lopez');
+    await owner.getByLabel(/date of birth/i).fill('1974-02-14');
+    await owner.getByLabel(/postal code/i).fill('60601');
+    await owner.getByRole('button', { name: 'Continue' }).click();
+    await owner.getByRole('textbox', { name: /message/i }).fill('I need an annual wellness visit in the morning');
+    await owner.getByRole('button', { name: /send request/i }).click();
+    await expect(owner.getByRole('status')).toHaveText(/Book appointment completed/i);
+
+    await attacker.goto('/');
+    await attacker.getByLabel(/first name/i).fill('Attacker');
+    await attacker.getByLabel(/last name/i).fill('Session');
+    await attacker.getByLabel(/date of birth/i).fill('1980-01-01');
+    await attacker.getByLabel(/postal code/i).fill('00000');
+    await attacker.getByRole('button', { name: 'Continue' }).click();
+    await expect(attacker.getByText(/front desk is temporarily unavailable/i)).toBeVisible();
+    await expect(attacker.getByText('Maria Lopez', { exact: true })).toHaveCount(0);
+
+    await owner.reload();
+    await expect(owner.getByRole('textbox', { name: /message/i })).toBeVisible();
+    await expect(owner.getByRole('status')).toHaveText(/Book appointment completed/i);
+
+    await ownerContext.close();
+    await attackerContext.close();
+  });
 });

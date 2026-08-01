@@ -74,7 +74,16 @@ function bootstrapSession(request: Request, response: Response, role: 'public' |
     response.status(403).json({ error: 'A separate demo context is required' });
     return;
   }
-  const session = existing ?? sessions.issue(role, 'anonymous');
+  let session: SessionContext;
+  try {
+    session = existing ?? sessions.issue(role, 'anonymous');
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Session capacity reached') {
+      response.status(429).json({ error: 'Demo session capacity reached; retry later' });
+      return;
+    }
+    throw error;
+  }
   if (!existing) setSessionCookie(response, session.sessionId);
   response.status(200).json(clientSession(session));
 }
@@ -133,11 +142,17 @@ app.post('/api/demo/identity', (request, response) => {
   if (!parsed.success) return response.status(400).json({ error: 'Valid synthetic identity fields are required' });
   const sessionId = cookieSessionId(request);
   if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
-  publicWorkflowOwnerSessionId = sessionId;
-  return response.status(200).json(demoWorkflow.submitIdentity(parsed.data));
+  if (publicWorkflowOwnerSessionId && publicWorkflowOwnerSessionId !== sessionId) {
+    return response.status(409).json({ error: 'Another synthetic workflow is already active' });
+  }
+  const result = demoWorkflow.submitIdentity(parsed.data);
+  if (result.identityVerified || result.phase === 'stopped') publicWorkflowOwnerSessionId = sessionId;
+  return response.status(200).json(result);
 });
 app.post('/api/demo/request', async (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
+  const sessionId = cookieSessionId(request);
+  if (!sessionId || sessionId !== publicWorkflowOwnerSessionId) return response.status(403).json({ error: 'This session does not own the workflow' });
   const parsed = demoRequestSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json({ error: 'A message is required' });
   try {
@@ -150,8 +165,13 @@ app.post('/api/demo/request', async (request, response) => {
 app.post('/api/demo/identity-replay', (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
   const sessionId = cookieSessionId(request);
-  if (sessionId) publicWorkflowOwnerSessionId = sessionId;
-  return response.status(200).json(demoWorkflow.submitUncertainIdentityReplay());
+  if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
+  if (publicWorkflowOwnerSessionId && publicWorkflowOwnerSessionId !== sessionId) {
+    return response.status(409).json({ error: 'Another synthetic workflow is already active' });
+  }
+  const result = demoWorkflow.submitUncertainIdentityReplay();
+  publicWorkflowOwnerSessionId = sessionId;
+  return response.status(200).json(result);
 });
 app.post('/api/demo/member-id', async (request, response) => {
   if (!authorizeMutation(request, 'patient-demo')) return response.status(403).json({ error: 'Patient demo session is required' });
