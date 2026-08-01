@@ -5,15 +5,39 @@ import { StediEligibilityFixture } from '../../src/adapters/stedi-eligibility-fi
 describe('deterministic provider fixtures', () => {
   it('emits the same validated intent without Deepgram', async () => {
     const adapter = new ScriptedConversationAdapter();
-    await expect(adapter.interpret('I need an annual wellness visit in the morning')).resolves.toMatchObject({
-      provider: 'scripted',
-      intent: { kind: 'annual-wellness-request', timeOfDay: 'morning' },
+    const originalText = '  I need an annual wellness visit in the morning  ';
+    await expect(adapter.evaluate(originalText, { workflowRunId: 'provider-run-1' })).resolves.toEqual({
+      action: 'continue',
+      originalText,
+      result: {
+        provider: 'scripted',
+        intent: { kind: 'annual-wellness-request', timeOfDay: 'morning' },
+      },
     });
   });
 
-  it('fails closed on clinical or mixed input', async () => {
+  it.each([
+    ['I have a rash', 'clinical-language'],
+    ['I feel dizzy', 'clinical-language'],
+    ['I have nausea', 'clinical-language'],
+    ['I am feeling off', 'clinical-language'],
+    ['Book an annual wellness visit and check my rash', 'mixed-clinical-administrative'],
+    ['I need an annual welness vist', 'administrative-unmatched'],
+    ['Do not book an annual wellness visit', 'administrative-unmatched'],
+  ] as const)('returns one exception and no booking for unsafe/unmatched provider text: %s', async (text, category) => {
     const adapter = new ScriptedConversationAdapter();
-    await expect(adapter.interpret('I have chest pain and need an appointment')).rejects.toThrow(/administrative/i);
+    const decision = await adapter.evaluate(text, { workflowRunId: 'provider-run-2' });
+
+    expect(decision).toMatchObject({
+      action: 'stop',
+      originalText: text,
+      category,
+      exceptionCommand: {
+        type: 'create-exception',
+        payload: { category, status: 'requested' },
+      },
+    });
+    expect(JSON.stringify(decision)).not.toContain('book-appointment');
   });
 
   it('does not run eligibility without the synthetic member ID', async () => {

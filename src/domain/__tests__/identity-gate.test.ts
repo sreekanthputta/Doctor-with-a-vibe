@@ -14,17 +14,17 @@ describe('demo identity gate', () => {
   it('derives the business identifier server-side for a new exact fixture identity', () => {
     expect(decideDemoIdentity(maria, [])).toEqual({
       outcome: 'verified-new-demo',
-      patientBusinessId: 'demo-v1:patient:maria',
+      patientBusinessId: DEMO_V1.patientBusinessId,
     });
   });
 
   it('binds one exact existing candidate with the derived identifier', () => {
     expect(decideDemoIdentity(maria, [{
-      patientBusinessId: 'demo-v1:patient:maria',
+      patientBusinessId: DEMO_V1.patientBusinessId,
       patientRef: 'Patient/123',
     }])).toEqual({
       outcome: 'exact-existing-demo',
-      patientBusinessId: 'demo-v1:patient:maria',
+      patientBusinessId: DEMO_V1.patientBusinessId,
     });
   });
 
@@ -38,8 +38,8 @@ describe('demo identity gate', () => {
 
   it('binds no patient when multiple existing candidates are returned', () => {
     expect(decideDemoIdentity(maria, [
-      { patientBusinessId: 'demo-v1:patient:maria', patientRef: 'Patient/1' },
-      { patientBusinessId: 'demo-v1:patient:maria', patientRef: 'Patient/2' },
+      { patientBusinessId: DEMO_V1.patientBusinessId, patientRef: 'Patient/1' },
+      { patientBusinessId: DEMO_V1.patientBusinessId, patientRef: 'Patient/2' },
     ])).toEqual({ outcome: 'uncertain', exceptionCommandId: 'demo-v1:identity-exception:maria-demo' });
   });
 
@@ -47,11 +47,11 @@ describe('demo identity gate', () => {
     const winner = resolveConditionalCreate(maria, { kind: 'created', patientRef: 'Patient/123' });
     const loser = resolveConditionalCreate(maria, {
       kind: 'conflict',
-      rereadCandidates: [{ patientBusinessId: 'demo-v1:patient:maria', patientRef: 'Patient/123' }],
+      rereadCandidates: [{ patientBusinessId: DEMO_V1.patientBusinessId, patientRef: 'Patient/123' }],
     });
 
-    expect(winner).toEqual({ outcome: 'verified-new-demo', patientBusinessId: 'demo-v1:patient:maria' });
-    expect(loser).toEqual({ outcome: 'exact-existing-demo', patientBusinessId: 'demo-v1:patient:maria' });
+    expect(winner).toEqual({ outcome: 'verified-new-demo', patientBusinessId: DEMO_V1.patientBusinessId });
+    expect(loser).toEqual({ outcome: 'exact-existing-demo', patientBusinessId: DEMO_V1.patientBusinessId });
   });
 
   it('fails closed when a conditional-create conflict cannot be reread as one exact candidate', () => {

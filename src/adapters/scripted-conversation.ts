@@ -1,22 +1,39 @@
 import { ConversationAdapterResultSchema, type ConversationAdapterResult } from '../contracts/provider';
+import {
+  evaluateAdministrativeText,
+  type AdministrativeTextDecision,
+} from '../domain/administrative-grammar';
 
-const clinicalLanguage = /\b(chest pain|symptom|medicine|medication|dose|diagnos|headache|bleeding|shortness of breath|hurt|fever)\b/i;
+export type ScriptedConversationDecision =
+  | (Extract<AdministrativeTextDecision, { action: 'stop' }>)
+  | {
+    action: 'continue';
+    originalText: string;
+    result: ConversationAdapterResult;
+  };
 
 export class ScriptedConversationAdapter {
-  interpret(text: string): Promise<ConversationAdapterResult> {
-    const normalized = text.trim();
-    if (!normalized || clinicalLanguage.test(normalized)) {
-      return Promise.reject(new Error('Only the closed administrative request grammar is accepted'));
-    }
-
-    if (/annual wellness|annual physical|wellness visit/i.test(normalized)) {
-      const timeOfDay = /morning/i.test(normalized) ? 'morning' : /afternoon/i.test(normalized) ? 'afternoon' : undefined;
-      return Promise.resolve(ConversationAdapterResultSchema.parse({
+  evaluate(
+    originalText: string,
+    context: { workflowRunId: string } = { workflowRunId: 'unbound' },
+  ): Promise<ScriptedConversationDecision> {
+    const decision = evaluateAdministrativeText(originalText, context);
+    if (decision.action === 'stop') return Promise.resolve(decision);
+    return Promise.resolve({
+      action: 'continue',
+      originalText: decision.originalText,
+      result: ConversationAdapterResultSchema.parse({
         provider: 'scripted',
-        intent: { kind: 'annual-wellness-request', ...(timeOfDay ? { timeOfDay } : {}) },
-      }));
-    }
+        intent: decision.intent,
+      }),
+    });
+  }
 
-    return Promise.reject(new Error('Input did not match an administrative intent'));
+  async interpret(text: string): Promise<ConversationAdapterResult> {
+    const decision = await this.evaluate(text);
+    if (decision.action === 'stop') {
+      throw new Error('Only the closed administrative request grammar is accepted');
+    }
+    return decision.result;
   }
 }

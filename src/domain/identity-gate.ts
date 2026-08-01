@@ -12,7 +12,7 @@ export type ConditionalCreateResult =
   | { kind: 'created'; patientRef: string }
   | { kind: 'conflict'; rereadCandidates: readonly IdentityCandidate[] };
 
-const PATIENT_BUSINESS_ID = `${DEMO_V1.identifierPrefix}patient:maria`;
+const PATIENT_BUSINESS_ID = DEMO_V1.patientBusinessId;
 const UNCERTAIN: IdentityDecision = {
   outcome: 'uncertain',
   exceptionCommandId: `${DEMO_V1.identifierPrefix}identity-exception:maria-demo`,
