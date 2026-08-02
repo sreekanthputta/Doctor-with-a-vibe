@@ -6,7 +6,7 @@
 
 VibeDoc is the fictional virtual-first clinic and product brand, operated by one family physician without dedicated administrative staff. It is explicitly not a hospital; physical and specialty services remain with external human-operated partners.
 
-Current status: architecture, hackathon scope, and the test-first implementation contract are frozen. The next step is Gate 0A: create the strict-TypeScript scaffold, shared contracts, immutable fixtures, test harness, and reproducible clean-worktree gate before starting three parallel writer lanes.
+Current status: the strict-TypeScript application, four role-separated shells, deterministic typed workflow, Medplum persistence graph, exception inbox, sanitized trace UI, Railway runtime configuration, and automated test harness are implemented. The release process is in final integration review and rehearsal; optional live voice and Stedi remain feature-gated fallbacks, not demo dependencies.
 
 ## Hackathon proof
 
