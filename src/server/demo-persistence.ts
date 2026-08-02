@@ -22,5 +22,7 @@ export interface DemoPersistence {
   start(identity: DemoIdentity): Promise<DemoPersistenceSnapshot>;
   complete(memberId: string): Promise<DemoPersistenceSnapshot>;
   recordUncertainIdentity(correlationId: string): Promise<DemoPersistenceSnapshot>;
+  recordException(category: string, correlationId: string): Promise<DemoPersistenceSnapshot>;
+  acknowledgeException(): Promise<DemoPersistenceSnapshot>;
   reset(): Promise<{ deletedCount: number; verified: true }>;
 }

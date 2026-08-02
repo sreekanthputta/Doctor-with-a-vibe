@@ -17,7 +17,15 @@ class RecordingPersistence implements DemoPersistence {
     this.calls.push(`complete:${memberId}`);
     return Promise.resolve({
       phase: 'ready',
-      evidence: [{ resourceType: 'CoverageEligibilityResponse', reference: 'CoverageEligibilityResponse/live-2', version: '3', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Eligibility evidence' }],
+      evidence: [
+        { resourceType: 'Appointment', reference: 'Appointment/live-1', version: '1', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Scheduling' },
+        { resourceType: 'Coverage', reference: 'Coverage/live-1', version: '2', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Coverage' },
+        { resourceType: 'QuestionnaireResponse', reference: 'QuestionnaireResponse/live-1', version: '2', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Patient-reported intake' },
+        { resourceType: 'Task', reference: 'Task/live-1', version: '2', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Owned exception' },
+        { resourceType: 'CoverageEligibilityRequest', reference: 'CoverageEligibilityRequest/live-1', version: '1', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Eligibility input' },
+        { resourceType: 'CoverageEligibilityResponse', reference: 'CoverageEligibilityResponse/live-2', version: '3', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Eligibility evidence' },
+        { resourceType: 'Provenance', reference: 'Provenance/live-1', version: '1', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Version lineage' },
+      ],
     });
   }
 
@@ -27,6 +35,16 @@ class RecordingPersistence implements DemoPersistence {
       phase: 'stopped',
       evidence: [{ resourceType: 'Task', reference: 'Task/uncertain-1', version: '1', sourceUpdatedAt: '2026-08-01T18:00:00Z', workflowRole: 'Owned exception' }],
     });
+  }
+
+  recordException(category: string, correlationId: string): Promise<DemoPersistenceSnapshot> {
+    this.calls.push(`exception:${category}:${correlationId}`);
+    return Promise.resolve({ phase: 'stopped', evidence: [] });
+  }
+
+  acknowledgeException(): Promise<DemoPersistenceSnapshot> {
+    this.calls.push('acknowledge');
+    return Promise.resolve({ phase: 'stopped', evidence: [] });
   }
 
   reset(): Promise<{ deletedCount: number; verified: true }> {
@@ -58,6 +76,20 @@ describe('DemoWorkflowStore vertical slice', () => {
     expect(ready.resourceEvidence.map((item) => item.resourceType)).toEqual(expect.arrayContaining(['CoverageEligibilityRequest', 'CoverageEligibilityResponse', 'Provenance']));
   });
 
+  it('refuses Ready when persistence omits required committed evidence', async () => {
+    const persistence = new RecordingPersistence();
+    persistence.complete = () => Promise.resolve({
+      phase: 'ready',
+      evidence: [{ resourceType: 'CoverageEligibilityResponse', reference: 'CoverageEligibilityResponse/incomplete', version: '1', sourceUpdatedAt: '2026-08-01T18:01:00Z', workflowRole: 'Eligibility evidence' }],
+    });
+    const store = new DemoWorkflowStore(undefined, undefined, persistence);
+    await verifyMaria(store);
+    await store.submitRequest('I need an annual wellness visit');
+
+    await expect(store.submitMemberId('AETNA-DEMO-2048')).rejects.toThrow(/required persisted evidence/i);
+    expect(store.snapshot().phase).toBe('needs-attention');
+  });
+
   it('uses reread persistence evidence for the visible workflow and reset', async () => {
     const persistence = new RecordingPersistence();
     const store = new DemoWorkflowStore(undefined, undefined, persistence);
@@ -66,7 +98,7 @@ describe('DemoWorkflowStore vertical slice', () => {
     await store.submitRequest('I need an annual wellness visit');
     expect(store.snapshot().resourceEvidence).toEqual([expect.objectContaining({ reference: 'Appointment/live-1', version: '7' })]);
     await store.submitMemberId('AETNA-DEMO-2048');
-    expect(store.snapshot().resourceEvidence).toEqual([expect.objectContaining({ reference: 'CoverageEligibilityResponse/live-2', version: '3' })]);
+    expect(store.snapshot().resourceEvidence).toEqual(expect.arrayContaining([expect.objectContaining({ reference: 'CoverageEligibilityResponse/live-2', version: '3' })]));
     await store.reset();
     expect(persistence.calls).toEqual(['start', 'complete:AETNA-DEMO-2048', 'reset']);
   });
@@ -81,6 +113,18 @@ describe('DemoWorkflowStore vertical slice', () => {
     expect(stopped.resourceEvidence.some((item) => item.resourceType === 'Appointment')).toBe(false);
     await store.submitRequest('I have chest pain and need an annual wellness visit');
     expect(store.snapshot().exceptions).toHaveLength(1);
+  });
+
+  it('persists a mixed clinical stop before returning its owned exception', async () => {
+    const persistence = new RecordingPersistence();
+    const store = new DemoWorkflowStore(undefined, undefined, persistence);
+    await verifyMaria(store);
+
+    const stopped = await store.submitRequest('I have chest pain and need an annual wellness visit');
+
+    expect(stopped.phase).toBe('stopped');
+    expect(persistence.calls).toContainEqual(expect.stringMatching(/^exception:mixed-clinical-administrative:/));
+    expect(persistence.calls).not.toContain('start');
   });
 
   it('preserves an unmatched administrative category and neutral stop copy', async () => {

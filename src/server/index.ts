@@ -16,13 +16,18 @@ const app = express();
 const environment = parseServerEnv(process.env);
 const port = environment.port;
 const distPath = path.resolve(process.cwd(), 'dist');
-const demoPersistence = await (async () => {
-  if (!environment.useLiveMedplum) return undefined;
+const livePersistences = await (async () => {
+  if (!environment.useLiveMedplum) return {};
   const client = new MedplumClient({ baseUrl: environment.medplumBaseUrl });
   await client.startClientLogin(environment.medplumClientId!, environment.medplumClientSecret!);
-  return MedplumDemoPersistence.fromClient(client, { runId: `server-${Date.now()}` });
+  const run = Date.now();
+  return {
+    demo: MedplumDemoPersistence.fromClient(client, { runId: `server-${run}` }),
+    identityException: MedplumDemoPersistence.fromClient(client, { runId: `identity-${run}` }),
+  };
 })();
-const demoWorkflow = new DemoWorkflowStore(undefined, undefined, demoPersistence);
+const demoWorkflow = new DemoWorkflowStore(undefined, undefined, livePersistences.demo);
+const identityExceptionWorkflow = new DemoWorkflowStore(undefined, undefined, livePersistences.identityException);
 const sessions = new SessionStore();
 const demoRequestSchema = z.object({ message: z.string().trim().min(1) }).strict();
 const memberIdSchema = z.object({ memberId: z.string() }).strict();
@@ -35,6 +40,16 @@ const identitySchema = z.object({
 }).strict();
 const sessionCookieName = '__Host-vibedoc_session';
 let publicWorkflowOwnerSessionId: string | undefined;
+let identityExceptionOwnerSessionId: string | undefined;
+
+function physicianSnapshot(): ReturnType<DemoWorkflowStore['snapshot']> {
+  const primary = demoWorkflow.snapshot();
+  const identityException = identityExceptionWorkflow.snapshot();
+  return {
+    ...primary,
+    exceptions: [...primary.exceptions, ...identityException.exceptions],
+  };
+}
 
 function cookieSessionId(request: Request): string | undefined {
   const cookie = request.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${sessionCookieName}=`));
@@ -109,10 +124,12 @@ app.get('/api/demo/state', (_request, response) => {
   const session = currentSession(_request);
   if (!session) return response.status(401).json({ error: 'A demo session is required' });
   if (session.role === 'demo-access') return response.status(403).json({ error: 'Choose a demo persona first' });
-  if (session.role === 'public' && session.sessionId !== publicWorkflowOwnerSessionId) {
+  if (session.role === 'public') {
+    if (session.sessionId === publicWorkflowOwnerSessionId) return response.status(200).json(demoWorkflow.snapshot());
+    if (session.sessionId === identityExceptionOwnerSessionId) return response.status(200).json(identityExceptionWorkflow.snapshot());
     return response.status(200).json({ phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false, providerMode: environment.useLiveMedplum ? 'live' : 'fixture' });
   }
-  return response.status(200).json(demoWorkflow.snapshot());
+  return response.status(200).json(session.role === 'physician-demo' ? physicianSnapshot() : demoWorkflow.snapshot());
 });
 app.get('/api/session/public', (request, response) => {
   bootstrapSession(request, response, 'public');
@@ -142,7 +159,9 @@ app.post('/api/demo/reset', async (request, response) => {
     return response.status(404).json({ error: 'Not found' });
   }
   const result = await demoWorkflow.reset();
+  await identityExceptionWorkflow.reset();
   publicWorkflowOwnerSessionId = undefined;
+  identityExceptionOwnerSessionId = undefined;
   response.status(200).json(result);
 });
 app.post('/api/demo/identity', async (request, response) => {
@@ -175,12 +194,21 @@ app.post('/api/demo/identity-replay', async (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
   const sessionId = cookieSessionId(request);
   if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
-  if (publicWorkflowOwnerSessionId && publicWorkflowOwnerSessionId !== sessionId) {
+  if (identityExceptionOwnerSessionId && identityExceptionOwnerSessionId !== sessionId) {
     return response.status(409).json({ error: 'Another synthetic workflow is already active' });
   }
-  const result = await demoWorkflow.submitUncertainIdentityReplay();
-  publicWorkflowOwnerSessionId = sessionId;
+  const result = await identityExceptionWorkflow.submitUncertainIdentityReplay();
+  identityExceptionOwnerSessionId = sessionId;
   return response.status(200).json(result);
+});
+app.post('/api/demo/exceptions/:exceptionId/acknowledge', async (request, response) => {
+  if (!authorizeMutation(request, 'physician-demo')) return response.status(403).json({ error: 'Physician session is required' });
+  try {
+    await identityExceptionWorkflow.acknowledgeException(request.params.exceptionId);
+    return response.status(200).json(physicianSnapshot());
+  } catch {
+    return response.status(404).json({ error: 'Exception was not found' });
+  }
 });
 app.post('/api/demo/member-id', async (request, response) => {
   if (!authorizeMutation(request, 'patient-demo')) return response.status(403).json({ error: 'Patient demo session is required' });

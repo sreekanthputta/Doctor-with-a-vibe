@@ -19,7 +19,7 @@ import { buildVersionedProvenance } from '../fhir/provenance';
 import { buildQuestionnaireResponse, planQuestionnaireResponseCompletion } from '../fhir/questionnaire';
 import { buildMutationPlan, type FhirRepository } from '../fhir/repository';
 import { buildAppointmentDraft, captureBookedReferences } from '../fhir/scheduling';
-import { buildMissingMemberTask, buildUncertainIdentityTask, planHumanTaskAcceptance } from '../fhir/tasks';
+import { buildExceptionTask, buildMissingMemberTask, planHumanTaskAcceptance } from '../fhir/tasks';
 import type {
   DemoIdentity,
   DemoPersistence,
@@ -361,16 +361,20 @@ export class MedplumDemoPersistence implements DemoPersistence {
   }
 
   async recordUncertainIdentity(correlationId: string): Promise<DemoPersistenceSnapshot> {
+    return this.recordException('resolve-uncertain-identity', correlationId);
+  }
+
+  async recordException(category: string, correlationId: string): Promise<DemoPersistenceSnapshot> {
     if (this.#snapshot) throw new Error('A patient-bound workflow cannot become an uncertain-identity session');
     if (this.#uncertainSnapshot) return structuredClone(this.#uncertainSnapshot);
     const taskDueStart = this.#now();
-    const task = await this.#create(buildUncertainIdentityTask({
-      taskBusinessId: `${this.#runId}-uncertain-identity`,
-      correlationId,
+    const task = await this.#create(buildExceptionTask({
+      taskBusinessId: `${this.#runId}-${correlationId}`,
+      category,
       dueStart: taskDueStart,
       dueEnd: dueEndFrom(taskDueStart),
       ownerReference: this.#seedReferences.providerReference,
-    }), 'uncertain-identity');
+    }), `exception-${category}`);
     this.#uncertainSnapshot = { phase: 'stopped', evidence: await this.#evidence([task]) };
     return structuredClone(this.#uncertainSnapshot);
   }

@@ -18,7 +18,7 @@ export type DemoResourceEvidence = {
 export type DemoException = {
   id: string;
   category: StopCategory;
-  status: 'requested';
+  status: 'requested' | 'accepted';
   ownerReference: string;
 };
 
@@ -31,6 +31,22 @@ export type DemoWorkflowSnapshot = {
   identityVerified: boolean;
   providerMode: 'fixture' | 'live';
 };
+
+const REQUIRED_READY_EVIDENCE = [
+  'Appointment',
+  'Coverage',
+  'QuestionnaireResponse',
+  'Task',
+  'CoverageEligibilityRequest',
+  'CoverageEligibilityResponse',
+  'Provenance',
+] as const;
+
+function requirePersistedReadyEvidence(evidence: readonly DemoResourceEvidence[]): void {
+  const present = new Set(evidence.map((item) => item.resourceType));
+  const missing = REQUIRED_READY_EVIDENCE.filter((resourceType) => !present.has(resourceType));
+  if (missing.length > 0) throw new Error(`Ready is missing required persisted evidence: ${missing.join(', ')}`);
+}
 
 export class DemoWorkflowStore {
   #domain: DemoWorkflowState = createWorkflowState('demo-v1:workflow:maria');
@@ -64,10 +80,11 @@ export class DemoWorkflowStore {
     if (!this.#identityVerified) throw new Error('Identity verification is required before scheduling');
     const decision = await this.conversation.evaluate(message, { workflowRunId: this.#domain.workflowRunId });
     if (decision.action === 'stop') {
+      const persisted = await this.persistence?.recordException(decision.category, decision.exceptionCommand.commandId);
       this.#domain = reduceWorkflow(this.#domain, { type: 'stopped', category: decision.category });
       this.#snapshot = {
         phase: 'stopped',
-        resourceEvidence: [],
+        resourceEvidence: persisted?.evidence ?? [],
         identityVerified: this.#identityVerified,
         providerMode: this.#providerMode(),
         stopCopy: decision.safeCopy,
@@ -128,6 +145,7 @@ export class DemoWorkflowStore {
       ? await this.persistence.complete(memberId)
       : undefined;
     if (persisted && persisted.phase !== 'ready') throw new Error('Persistence did not commit a ready workflow');
+    if (persisted) requirePersistedReadyEvidence(persisted.evidence);
     if (!this.persistence) await this.eligibility.check({ memberId });
     this.#domain = reduceWorkflow(this.#domain, { type: 'member-id-supplied' });
     this.#domain = reduceWorkflow(this.#domain, { type: 'coverage-updated' });
@@ -148,6 +166,19 @@ export class DemoWorkflowStore {
         this.#evidence('Communication', 'member-follow-up-completed', 'Follow-up history'),
         this.#evidence('Provenance', 'ready-lineage', 'Version lineage'),
       ],
+    };
+    return this.snapshot();
+  }
+
+  async acknowledgeException(exceptionId: string): Promise<DemoWorkflowSnapshot> {
+    const exception = this.#snapshot.exceptions.find((item) => item.id === exceptionId);
+    if (!exception) throw new Error('Exception was not found');
+    if (exception.status === 'accepted') return this.snapshot();
+    const persisted = await this.persistence?.acknowledgeException();
+    this.#snapshot = {
+      ...this.#snapshot,
+      resourceEvidence: persisted?.evidence ?? this.#snapshot.resourceEvidence,
+      exceptions: this.#snapshot.exceptions.map((item) => item.id === exceptionId ? { ...item, status: 'accepted' } : item),
     };
     return this.snapshot();
   }

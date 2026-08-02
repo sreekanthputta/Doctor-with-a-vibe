@@ -33,7 +33,7 @@ test.describe('VibeDoc four-shell demo', () => {
     await publicPage.getByLabel(/postal code/i).fill('60601');
     await publicPage.getByRole('button', { name: 'Continue' }).click();
     await expect(publicPage.getByRole('textbox', { name: /message/i })).toBeVisible();
-    await publicPage.getByRole('textbox', { name: /message/i }).fill('I need an annual wellness visit in the morning');
+    await publicPage.getByRole('textbox', { name: /message/i }).fill("I'm a new patient. I want an annual wellness visit next Tuesday morning and I have Aetna.");
     await publicPage.getByRole('button', { name: /send request/i }).click();
     await expect(publicPage.getByRole('status')).toHaveText(/Book appointment completed/i);
     await publicPage.getByRole('button', { name: /Book appointment completed/i }).click();
@@ -129,5 +129,51 @@ test.describe('VibeDoc four-shell demo', () => {
 
     await ownerContext.close();
     await attackerContext.close();
+  });
+
+  test('Ready Maria coexists with one separately owned identity exception that the physician can acknowledge', async ({ browser }) => {
+    const publicContext = await browser.newContext();
+    const patientContext = await browser.newContext();
+    const uncertainContext = await browser.newContext();
+    const physicianContext = await browser.newContext();
+    const publicPage = await publicContext.newPage();
+    const patient = await patientContext.newPage();
+    const uncertain = await uncertainContext.newPage();
+    const physician = await physicianContext.newPage();
+
+    await publicPage.goto('/');
+    await publicPage.getByLabel(/first name/i).fill('Maria');
+    await publicPage.getByLabel(/last name/i).fill('Lopez');
+    await publicPage.getByLabel(/date of birth/i).fill('1974-02-14');
+    await publicPage.getByLabel(/postal code/i).fill('60601');
+    await publicPage.getByRole('button', { name: 'Continue' }).click();
+    await publicPage.getByRole('textbox', { name: /message/i }).fill("I'm a new patient. I want an annual wellness visit next Tuesday morning and I have Aetna.");
+    await publicPage.getByRole('button', { name: /send request/i }).click();
+
+    await patient.goto('/demo');
+    await patient.getByRole('button', { name: /Continue as Maria Lopez/i }).click();
+    await patient.waitForURL('**/patient/visit');
+    await patient.getByLabel(/insurance member id/i).fill('AETNA-DEMO-2048');
+    await patient.getByRole('button', { name: /submit member id/i }).click();
+    await expect(patient.getByRole('status')).toHaveText('Ready');
+
+    await uncertain.goto('/');
+    await uncertain.getByRole('button', { name: /Replay uncertain identity/i }).click();
+    await expect(uncertain.getByRole('heading', { name: /Identity could not be confirmed/i })).toBeVisible();
+    await expect(uncertain.getByText(/No patient information was disclosed/i)).toBeVisible();
+
+    await physician.goto('/demo');
+    await physician.getByRole('button', { name: /Continue as Dr\. Maya Chen/i }).click();
+    await physician.waitForURL('**/physician/inbox');
+    await expect(physician.getByRole('status')).toHaveText('Ready');
+    await physician.getByRole('button', { name: /Exceptions \(1\)/i }).click();
+    await expect(physician.getByText(/requested · unacknowledged/i)).toBeVisible();
+    await physician.getByRole('button', { name: /Acknowledge identity exception/i }).click();
+    await expect(physician.getByText(/accepted · acknowledged/i)).toBeVisible();
+
+    await publicContext.close();
+    await patientContext.close();
+    await uncertainContext.close();
+    await physicianContext.close();
   });
 });

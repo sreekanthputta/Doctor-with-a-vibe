@@ -8,6 +8,7 @@ import { completedBookingTrace, physicianVisits } from '../ui/fixtures/presentat
 import type { DemoWorkflowSnapshot } from '../server/demo-workflow-store';
 import type { ExceptionVM, PhysicianVisitVM } from '../ui/view-models';
 import type { SessionContext } from '../contracts/session';
+import { projectPersistedWorkflowEvidence } from '../ui/mappers/evidence-presentation';
 
 type ClientSession = Omit<SessionContext, 'sessionId'>;
 
@@ -107,17 +108,18 @@ export function App(): React.JSX.Element {
   if (shell === 'physician') {
     const visits: PhysicianVisitVM[] = snapshot?.visit ? (() => {
       const base = physicianVisits[0];
-      const sourceLabel = snapshot.providerMode === 'live' ? 'Medplum · live committed resources' : 'Synthetic deterministic FHIR fixture';
-      if (snapshot.visit.status === 'ready') return [{ ...base, ...snapshot.visit, sourceLabel }];
+      const evidence = projectPersistedWorkflowEvidence({
+        evidence: snapshot.resourceEvidence,
+        conversation: 'deterministic-typed',
+        persistence: snapshot.providerMode === 'live' ? 'medplum-live' : 'medplum-fixture',
+        workflowStatus: snapshot.visit.status,
+        taskOwnerDisplay: 'Dr. Maya Chen',
+      });
       return [{
         ...base,
         ...snapshot.visit,
-        sourceLabel,
-        evidenceResources: base.evidenceResources.filter((item) => [
-          'booking-record', 'patient-reported-intake', 'coverage-record', 'follow-up-request', 'delivered-follow-up',
-        ].includes(item.workflowRole)),
-        resolvedTaskHistory: undefined,
-        eligibilityLinkage: undefined,
+        ...evidence,
+        sourceLabel: evidence.sourceModes.persistence.label,
       }];
     })() : [];
     const exceptions: ExceptionVM[] = (snapshot?.exceptions ?? []).map((exception) => ({
@@ -131,7 +133,7 @@ export function App(): React.JSX.Element {
       ownerDisplay: 'Dr. Maya Chen',
       dueAt: '2026-08-01T17:00:00-05:00',
       status: exception.status,
-      acknowledged: false,
+      acknowledged: exception.status === 'accepted',
       reason: 'Automation stopped without revealing patient information.',
     }));
     return (
@@ -140,7 +142,12 @@ export function App(): React.JSX.Element {
         visits={visits}
         exceptions={exceptions}
         onOpenVisit={() => undefined}
-        onAcknowledgeException={() => undefined}
+        onAcknowledgeException={(exceptionId) => {
+          if (!session) return;
+          void mutateSnapshot(`/api/demo/exceptions/${encodeURIComponent(exceptionId)}/acknowledge`, {}, session.csrfToken)
+            .then(setSnapshot)
+            .catch(() => setLoadFailed(true));
+        }}
       />
     );
   }
@@ -148,10 +155,17 @@ export function App(): React.JSX.Element {
   return (
     <PublicAccessShell
       state={loadFailed ? 'error' : snapshot?.phase === 'stopped' ? 'stopped' : snapshot ? 'ready' : 'loading'}
-      providerMode={snapshot?.providerMode ?? 'fixture'}
+      providerMode="fixture"
       traceContextKey={`public:${snapshot?.phase ?? 'loading'}`}
       traces={snapshot?.phase === 'needs-attention' || snapshot?.phase === 'ready'
-        ? [{ ...completedBookingTrace, providerMode: snapshot.providerMode }]
+        ? [{
+          ...completedBookingTrace,
+          providerMode: snapshot.providerMode,
+          safeOutput: {
+            result: 'Appointment recorded',
+            source: snapshot.providerMode === 'live' ? 'Medplum live' : 'Medplum fixture',
+          },
+        }]
         : []}
       stopCopy={snapshot?.stopCopy}
       stopHeading={snapshot?.exceptions[0]?.category === 'identity' ? 'Identity could not be confirmed' : undefined}

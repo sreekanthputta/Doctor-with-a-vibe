@@ -227,6 +227,19 @@ describe('MedplumDemoPersistence', () => {
     expect(task?.resourceType === 'Task' && task.focus).toBeUndefined();
   });
 
+  it('persists one unbound owned clinical-language exception without creating an Appointment', async () => {
+    const { persistence, repository } = createHarness();
+    const first = await persistence.recordException('clinical-language', 'clinical-stop-1');
+    const second = await persistence.recordException('clinical-language', 'clinical-stop-1');
+    const tasks = [...repository.resources.values()].filter((resource) => resource.resourceType === 'Task');
+
+    expect(first).toEqual(second);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ resourceType: 'Task', status: 'requested', owner: { reference: DEMO_V1.practitionerRoleReference } });
+    expect(tasks[0]?.resourceType === 'Task' && tasks[0].for).toBeUndefined();
+    expect([...repository.resources.values()].some((resource) => resource.resourceType === 'Appointment')).toBe(false);
+  });
+
   it('accepts the uncertain identity Task once using a version-aware human transition', async () => {
     const { persistence, repository } = createHarness();
     const stopped = await persistence.recordUncertainIdentity('uncertain-1');
