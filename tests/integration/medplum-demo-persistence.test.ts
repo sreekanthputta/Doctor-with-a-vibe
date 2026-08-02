@@ -1,4 +1,4 @@
-import type { Identifier, Resource } from '@medplum/fhirtypes';
+import type { Identifier, Resource, Slot } from '@medplum/fhirtypes';
 import { describe, expect, it } from 'vitest';
 import { MedplumDemoPersistence } from '../../src/adapters/medplum-demo-persistence';
 import { StediEligibilityFixture } from '../../src/adapters/stedi-eligibility-fixture';
@@ -11,15 +11,25 @@ class MemoryRepository implements FhirRepository {
   readonly failOn = new Set<string>();
   duplicatePatientOnSearch = false;
   corruptEligibilityResponseOnRead = false;
+  loseFirstProvenanceConditionalResponse = false;
+  #lostProvenanceResponse = false;
   #nextId = 1;
 
   async conditionalCreate<T extends Resource>(resource: T): Promise<{ created: boolean; resource: T }> {
     const identifier = identifiersOf(resource)[0];
     const existing = [...this.resources.values()].find((candidate) =>
       candidate.resourceType === resource.resourceType
-      && identifiersOf(candidate).some((value) => value.system === identifier?.system && value.value === identifier?.value));
+      && (
+        identifiersOf(candidate).some((value) => value.system === identifier?.system && value.value === identifier?.value)
+        || tagsOf(candidate).some((value) => tagsOf(resource).some((tag) => tag.system === value.system && tag.code === value.code))
+      ));
     if (existing) return { created: false, resource: structuredClone(existing) as T };
-    return { created: true, resource: await this.persist(resource, 'conditional-create') };
+    const persisted = await this.persist(resource, 'conditional-create');
+    if (resource.resourceType === 'Provenance' && this.loseFirstProvenanceConditionalResponse && !this.#lostProvenanceResponse) {
+      this.#lostProvenanceResponse = true;
+      throw new Error('simulated response loss after Provenance commit');
+    }
+    return { created: true, resource: persisted };
   }
 
   create<T extends Resource>(plan: MutationPlan<T>): Promise<T> {
@@ -69,14 +79,23 @@ class MemoryRepository implements FhirRepository {
     this.events.push(`${operation}:${resource.resourceType}`);
     if (this.failOn.has(`${operation}:${resource.resourceType}`)) return Promise.reject(new Error(`forced ${resource.resourceType} failure`));
     const id = resource.id ?? `${resource.resourceType.toLowerCase()}-${this.#nextId++}`;
-    const persisted = { ...structuredClone(resource), id, meta: { versionId: '1', lastUpdated: DEMO_V1.clock } } as T;
+    const persisted = {
+      ...structuredClone(resource),
+      id,
+      meta: { ...structuredClone(resource.meta), versionId: '1', lastUpdated: DEMO_V1.clock },
+    } as T;
     this.resources.set(`${resource.resourceType}/${id}`, persisted);
     return Promise.resolve(structuredClone(persisted));
   }
 }
 
 function identifiersOf(resource: Resource): Identifier[] {
-  return 'identifier' in resource && Array.isArray(resource.identifier) ? resource.identifier : [];
+  if (!('identifier' in resource) || !resource.identifier) return [];
+  return Array.isArray(resource.identifier) ? resource.identifier : [resource.identifier];
+}
+
+function tagsOf(resource: Resource): Array<{ system?: string; code?: string }> {
+  return resource.meta?.tag ?? [];
 }
 
 function statusOf(resource: Resource): string {
@@ -166,6 +185,53 @@ describe('MedplumDemoPersistence', () => {
     expect(repository.resources.get('Slot/atomic-busy')?.resourceType).toBe('Slot');
   });
 
+  it('reuses one booked Appointment and one workflow graph after a process restart', async () => {
+    const repository = new MemoryRepository();
+    let bookingCalls = 0;
+    const atomicScheduling = {
+      book: async (draft: import('@medplum/fhirtypes').Appointment) => {
+        bookingCalls += 1;
+        const slot = await repository.create<Slot>({
+          workflow: 'ready-visit', operation: 'create', idempotencyKey: `slot-${bookingCalls}`,
+          resource: {
+            resourceType: 'Slot', id: 'atomic-busy', status: 'busy', schedule: { reference: 'Schedule/live' },
+            start: draft.start!, end: draft.end!,
+          },
+        });
+        const appointment = await repository.create({
+          workflow: 'ready-visit', operation: 'create', idempotencyKey: `booking-${bookingCalls}`,
+          resource: { ...structuredClone(draft), status: 'booked', slot: [{ reference: `Slot/${slot.id}` }] },
+        });
+        return { appointment, slots: [slot] };
+      },
+    };
+    const first = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'restart-run', atomicScheduling, now: () => DEMO_V1.clock,
+    });
+    await first.start(exactIdentity);
+
+    const restarted = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'restart-run', atomicScheduling, now: () => DEMO_V1.clock,
+    });
+    const restored = await restarted.start(exactIdentity);
+    const completed = await restarted.complete(DEMO_V1.memberId);
+
+    expect(restored.phase).toBe('needs-attention');
+    expect(completed.phase).toBe('ready');
+    expect(bookingCalls).toBe(1);
+    for (const resourceType of [
+      'Patient', 'Appointment', 'Coverage', 'QuestionnaireResponse', 'Task', 'CommunicationRequest', 'Communication',
+    ]) {
+      expect([...repository.resources.values()].filter((resource) => resource.resourceType === resourceType)).toHaveLength(1);
+    }
+    expect([...repository.resources.values()].filter((resource) => resource.resourceType === 'CoverageEligibilityRequest')).toHaveLength(1);
+    expect([...repository.resources.values()].filter((resource) => resource.resourceType === 'CoverageEligibilityResponse')).toHaveLength(1);
+
+    const reset = await restarted.reset();
+    expect(reset.verified).toBe(true);
+    expect(repository.resources.size).toBe(0);
+  });
+
   it('updates versioned intake and coverage, persists linked eligibility, then completes the same Task', async () => {
     const { persistence, repository } = createHarness();
     const started = await persistence.start(exactIdentity);
@@ -217,6 +283,74 @@ describe('MedplumDemoPersistence', () => {
 
     await expect(persistence.complete(DEMO_V1.memberId)).resolves.toMatchObject({ phase: 'ready' });
     expect([...repository.resources.values()].filter((item) => item.resourceType === 'CoverageEligibilityRequest')).toHaveLength(1);
+  });
+
+  it('restores a Ready graph after restart with one correct Provenance per committed target version', async () => {
+    const { persistence, repository } = createHarness();
+    await persistence.start(exactIdentity);
+    await persistence.complete(DEMO_V1.memberId);
+
+    const restarted = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'integration-run', now: () => DEMO_V1.clock,
+    });
+    const restored = await restarted.restore();
+    const retried = await restarted.complete(DEMO_V1.memberId);
+    const provenances = [...repository.resources.values()].filter((resource) => resource.resourceType === 'Provenance');
+
+    expect(restored?.phase).toBe('ready');
+    expect(retried.phase).toBe('ready');
+    expect(provenances).toHaveLength(5);
+    for (const provenance of provenances) {
+      if (provenance.resourceType !== 'Provenance') throw new Error('expected Provenance');
+      const target = provenance.target[0]?.reference;
+      expect(target).toMatch(/\/_history\/\d+$/);
+      const [reference, version] = target?.split('/_history/') ?? [];
+      expect(repository.resources.get(reference ?? '')?.meta?.versionId).toBe(version);
+    }
+  });
+
+  it('reconciles a committed Provenance after its response is lost without duplicating the graph', async () => {
+    const repository = new MemoryRepository();
+    const first = createHarness(repository).persistence;
+    await first.start(exactIdentity);
+    repository.loseFirstProvenanceConditionalResponse = true;
+    await expect(first.complete(DEMO_V1.memberId)).rejects.toThrow('response loss after Provenance commit');
+
+    const restarted = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'integration-run', now: () => DEMO_V1.clock,
+    });
+    const restored = await restarted.restore();
+
+    expect(restored?.phase).toBe('ready');
+    expect([...repository.resources.values()].filter((resource) => resource.resourceType === 'Provenance')).toHaveLength(5);
+    for (const resourceType of [
+      'Patient', 'Appointment', 'Coverage', 'QuestionnaireResponse', 'Task', 'CommunicationRequest', 'Communication',
+      'CoverageEligibilityRequest', 'CoverageEligibilityResponse',
+    ]) {
+      expect([...repository.resources.values()].filter((resource) => resource.resourceType === resourceType)).toHaveLength(1);
+    }
+  });
+
+  it('restores and acknowledges the same unbound identity exception after restart', async () => {
+    const repository = new MemoryRepository();
+    const correlationId = 'demo-v1:exception:identity:uncertain';
+    const first = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'identity-restart', now: () => DEMO_V1.clock,
+    });
+    const created = await first.recordUncertainIdentity(correlationId);
+    const originalTask = created.evidence.find((item) => item.resourceType === 'Task');
+
+    const restarted = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'identity-restart', now: () => DEMO_V1.clock,
+    });
+    const restored = await restarted.restoreException('resolve-uncertain-identity', correlationId);
+    const accepted = await restarted.acknowledgeException();
+
+    expect(restored).toMatchObject({ status: 'requested', snapshot: { phase: 'stopped' } });
+    expect(restored?.snapshot.evidence[0]?.reference).toBe(originalTask?.reference);
+    expect(accepted.evidence[0]).toMatchObject({ reference: originalTask?.reference, version: '2' });
+    const task = repository.resources.get(originalTask?.reference ?? '');
+    expect(task?.resourceType === 'Task' && task.status).toBe('accepted');
   });
 
   it('does not project Ready from malformed reread eligibility evidence', async () => {

@@ -43,6 +43,10 @@ export class SessionStore {
     return session ? this.#publicSession(session) : undefined;
   }
 
+  isActive(sessionId: string): boolean {
+    return this.#active(sessionId) !== undefined;
+  }
+
   authorizeMutation(sessionId: string, csrfToken: string, requiredRole: Role): boolean {
     const session = this.#active(sessionId);
     return session?.csrfToken === csrfToken && session.role === requiredRole;

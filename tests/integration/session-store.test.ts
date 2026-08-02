@@ -41,4 +41,15 @@ describe('SessionStore', () => {
     store.issue('public', 'anonymous');
     expect(() => store.issue('public', 'anonymous')).toThrow(/capacity/i);
   });
+
+  it('exposes whether an owner session lease is still active', () => {
+    let current = new Date('2026-08-01T20:00:00.000Z');
+    const store = new SessionStore(() => current, 1_000);
+    const session = store.issue('public', 'anonymous');
+
+    expect(store.isActive(session.sessionId)).toBe(true);
+    current = new Date('2026-08-01T20:00:01.001Z');
+    expect(store.isActive(session.sessionId)).toBe(false);
+    expect(store.get(session.sessionId)).toBeUndefined();
+  });
 });

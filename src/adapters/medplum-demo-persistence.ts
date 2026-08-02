@@ -1,8 +1,11 @@
 import type {
+  Appointment,
   Coverage,
   CoverageEligibilityRequest,
   CoverageEligibilityResponse,
+  Identifier,
   Patient,
+  Provenance,
   QuestionnaireResponse,
   Resource,
   Slot,
@@ -14,7 +17,7 @@ import { MedplumFhirRepository } from './medplum-fhir-repository';
 import { buildDeliveredInAppCommunication, buildFollowUpRequest } from '../fhir/communication';
 import { buildCoverage, planCoverageMemberIdUpdate } from '../fhir/coverage';
 import { buildEligibilityRequest, buildEligibilityResponse, projectEligibility } from '../fhir/eligibility';
-import { requireVersionedReference } from '../fhir/identifiers';
+import { demoIdentifier, requireVersionedReference } from '../fhir/identifiers';
 import { buildDemoPatientCreate } from '../fhir/patient';
 import { buildVersionedProvenance } from '../fhir/provenance';
 import { buildQuestionnaireResponse, planQuestionnaireResponseCompletion } from '../fhir/questionnaire';
@@ -53,8 +56,8 @@ const DEFAULT_SEED_REFERENCES: DemoSeedReferences = {
 };
 
 type PersistedGraph = {
-  patient: Resource;
-  appointment: Resource;
+  patient: Patient;
+  appointment: Appointment;
   coverage: Coverage;
   questionnaireResponse: QuestionnaireResponse;
   task: Task;
@@ -78,6 +81,11 @@ const WORKFLOW_ROLES: Record<string, string> = {
 function referenceOf(resource: Resource): string {
   if (!resource.id) throw new Error(`${resource.resourceType} persistence returned no id`);
   return `${resource.resourceType}/${resource.id}`;
+}
+
+function firstIdentifier(resource: Resource): Identifier | undefined {
+  if (!('identifier' in resource) || !resource.identifier) return undefined;
+  return Array.isArray(resource.identifier) ? resource.identifier[0] : resource.identifier;
 }
 
 function validateIdentity(identity: DemoIdentity): void {
@@ -187,6 +195,8 @@ export class MedplumDemoPersistence implements DemoPersistence {
     validateIdentity(identity);
     if (this.#snapshot) return structuredClone(this.#snapshot);
     if (this.#uncertainSnapshot) throw new Error('An uncertain-identity session cannot bind a patient');
+    const restored = await this.restore();
+    if (restored) return restored;
 
     const patientCreate = buildDemoPatientCreate();
     const patientResult = await this.#repository.conditionalCreate(patientCreate.resource, patientCreate.ifNoneExist);
@@ -212,8 +222,14 @@ export class MedplumDemoPersistence implements DemoPersistence {
         endsAt: '2026-08-04T16:00:00.000Z',
         providerReference: this.#seedReferences.providerReference,
       });
-    let appointment: import('@medplum/fhirtypes').Appointment;
-    if (this.#atomicScheduling) {
+    let appointment = await this.#findByIdentifier<Appointment>(
+      'Appointment',
+      demoIdentifier('appointment', `${this.#runId}-maria-wellness`),
+    );
+    if (appointment) {
+      appointment = await this.#reread(appointment);
+      captureBookedReferences(appointment);
+    } else if (this.#atomicScheduling) {
       const booking = await this.#atomicScheduling.book(appointmentDraft);
       appointment = await this.#reread(booking.appointment);
       this.#record(appointment);
@@ -282,6 +298,122 @@ export class MedplumDemoPersistence implements DemoPersistence {
     return structuredClone(this.#snapshot);
   }
 
+  /**
+   * Reconstructs the in-memory workflow from stable FHIR business identifiers.
+   * A missing Appointment means this run has not started. A partial graph is left
+   * for start() to reconcile; a completed Task without valid eligibility fails closed.
+   */
+  async restore(): Promise<DemoPersistenceSnapshot | undefined> {
+    if (this.#snapshot) return structuredClone(this.#snapshot);
+    if (this.#uncertainSnapshot) return structuredClone(this.#uncertainSnapshot);
+
+    const appointment = await this.#findByIdentifier<Appointment>(
+      'Appointment',
+      demoIdentifier('appointment', `${this.#runId}-maria-wellness`),
+    );
+    if (!appointment) return undefined;
+
+    const patientCreate = buildDemoPatientCreate();
+    const patientIdentifier = firstIdentifier(patientCreate.resource);
+    if (!patientIdentifier) throw new Error('Synthetic Patient requires a business identifier');
+    const patient = await this.#findByIdentifier<Patient>('Patient', patientIdentifier);
+    const coverage = await this.#findByIdentifier<Coverage>(
+      'Coverage',
+      demoIdentifier('coverage', `${this.#runId}-maria-aetna`),
+    );
+    const questionnaireResponse = await this.#findByIdentifier<QuestionnaireResponse>(
+      'QuestionnaireResponse',
+      demoIdentifier('questionnaire-response', `${this.#runId}-maria-wellness`),
+    );
+    const task = await this.#findByIdentifier<Task>(
+      'Task',
+      demoIdentifier('task', `${this.#runId}-collect-member-id`),
+    );
+    const communicationRequest = await this.#findByIdentifier<Resource>(
+      'CommunicationRequest',
+      demoIdentifier('communication-request', `${this.#runId}-member-id-follow-up`),
+    );
+    const communication = await this.#findByIdentifier<Resource>(
+      'Communication',
+      demoIdentifier('communication', `${this.#runId}-member-id-follow-up-delivered`),
+    );
+    if (!patient || !coverage || !questionnaireResponse || !task || !communicationRequest || !communication) {
+      return undefined;
+    }
+
+    const committedPatient = await this.#reread(patient);
+    validatePersistedPatient(committedPatient);
+    const committedAppointment = await this.#reread(appointment);
+    captureBookedReferences(committedAppointment);
+    const patientReference = referenceOf(committedPatient);
+    if (!committedAppointment.participant?.some((participant) => participant.actor?.reference === patientReference)
+      || coverage.beneficiary?.reference !== patientReference
+      || questionnaireResponse.subject?.reference !== patientReference
+      || task.for?.reference !== patientReference) {
+      throw new Error('Restored workflow resources are not linked to the verified synthetic Patient');
+    }
+
+    this.#graph = {
+      patient: committedPatient,
+      appointment: committedAppointment,
+      coverage: await this.#reread(coverage),
+      questionnaireResponse: await this.#reread(questionnaireResponse),
+      task: await this.#reread(task),
+      communicationRequest: await this.#reread(communicationRequest),
+      communication: await this.#reread(communication),
+    };
+    for (const resource of Object.values(this.#graph)) this.#record(resource);
+    for (const slotReference of committedAppointment.slot ?? []) {
+      if (!slotReference.reference) continue;
+      const slot = await this.#repository.read<Slot>(slotReference.reference);
+      if (slot) this.#record(await this.#reread(slot));
+    }
+    const baseEvidence = Object.values(this.#graph);
+    if (this.#graph.task.status !== 'completed') {
+      this.#snapshot = { phase: 'needs-attention', evidence: await this.#evidence(baseEvidence) };
+      return structuredClone(this.#snapshot);
+    }
+
+    const eligibilityRequest = await this.#findByIdentifier<CoverageEligibilityRequest>(
+      'CoverageEligibilityRequest',
+      demoIdentifier('eligibility-request', `${this.#runId}-maria-wellness`),
+    );
+    const eligibilityResponse = await this.#findByIdentifier<CoverageEligibilityResponse>(
+      'CoverageEligibilityResponse',
+      demoIdentifier('eligibility-response', `${this.#runId}-maria-wellness`),
+    );
+    if (!eligibilityRequest || !eligibilityResponse || !this.#graph.coverage.subscriberId) {
+      throw new Error('Completed Task requires persisted eligibility evidence during reconciliation');
+    }
+    const committedRequest = await this.#reread(eligibilityRequest);
+    const committedResponse = await this.#reread(eligibilityResponse);
+    this.#record(committedRequest);
+    this.#record(committedResponse);
+    validateLinkedEligibility(
+      committedRequest,
+      committedResponse,
+      this.#graph.coverage,
+      this.#graph.coverage.subscriberId,
+    );
+    const lineageTargets: Resource[] = [
+      this.#graph.coverage,
+      this.#graph.questionnaireResponse,
+      committedRequest,
+      committedResponse,
+      this.#graph.task,
+    ];
+    const provenances: Provenance[] = [];
+    for (const target of lineageTargets) {
+      const provenance = await this.#ensureProvenance(target);
+      provenances.push(provenance);
+    }
+    this.#snapshot = {
+      phase: 'ready',
+      evidence: await this.#evidence([...baseEvidence, committedRequest, committedResponse, ...provenances]),
+    };
+    return structuredClone(this.#snapshot);
+  }
+
   async complete(memberId: string): Promise<DemoPersistenceSnapshot> {
     if (!this.#graph || !this.#snapshot) throw new Error('The persisted workflow has not started');
     if (this.#snapshot.phase === 'ready') return structuredClone(this.#snapshot);
@@ -344,14 +476,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
     const committed = [coverage, questionnaireResponse, eligibilityRequest, eligibilityResponse, completedTask];
     const provenances: Resource[] = [];
     for (const target of committed) {
-      const versioned = requireVersionedReference(target);
-      provenances.push(await this.#create(buildVersionedProvenance({
-        provenanceBusinessId: `${this.#runId}-${target.resourceType.toLowerCase()}`,
-        targetReference: versioned.reference,
-        targetVersionId: versioned.versionId,
-        recordedAt: this.#now(),
-        agentReference: DEMO_V1.practitionerRoleReference,
-      }), `provenance-${target.resourceType.toLowerCase()}`));
+      provenances.push(await this.#ensureProvenance(target));
     }
 
     validateLinkedEligibility(
@@ -384,6 +509,29 @@ export class MedplumDemoPersistence implements DemoPersistence {
 
   async recordUncertainIdentity(correlationId: string): Promise<DemoPersistenceSnapshot> {
     return this.recordException('resolve-uncertain-identity', correlationId);
+  }
+
+  async restoreException(
+    category: string,
+    correlationId: string,
+  ): Promise<{ snapshot: DemoPersistenceSnapshot; status: 'requested' | 'accepted' } | undefined> {
+    if (this.#snapshot) throw new Error('A patient-bound workflow cannot restore an unbound exception');
+    const task = await this.#findByIdentifier<Task>(
+      'Task',
+      demoIdentifier('task', `${this.#runId}-${correlationId}`),
+    );
+    if (!task) return undefined;
+    const committed = await this.#reread(task);
+    const taskCategory = committed.code?.coding?.find((coding) => coding.system === 'urn:vibedoc:task-code')?.code;
+    if (taskCategory !== category || committed.for || !committed.owner?.reference) {
+      throw new Error('Restored exception Task does not match the unbound exception contract');
+    }
+    if (committed.status !== 'requested' && committed.status !== 'accepted') {
+      throw new Error('Restored exception Task has an unsupported status');
+    }
+    this.#record(committed);
+    this.#uncertainSnapshot = { phase: 'stopped', evidence: await this.#evidence([committed]) };
+    return { snapshot: structuredClone(this.#uncertainSnapshot), status: committed.status };
   }
 
   async recordException(category: string, correlationId: string): Promise<DemoPersistenceSnapshot> {
@@ -437,13 +585,15 @@ export class MedplumDemoPersistence implements DemoPersistence {
   }
 
   async #create<T extends Resource>(resource: T, key: string): Promise<T> {
-    const identifier = 'identifier' in resource && Array.isArray(resource.identifier)
-      ? resource.identifier[0]
-      : undefined;
+    const identifier = firstIdentifier(resource);
     if (identifier?.system && identifier.value) {
       const existing = await this.#repository.searchByIdentifier<T>(resource.resourceType, identifier);
       if (existing.length > 1) throw new Error(`${resource.resourceType} idempotency identifier is ambiguous`);
-      if (existing[0]) return this.#reread(existing[0]);
+      if (existing[0]) {
+        const reread = await this.#reread(existing[0]);
+        this.#record(reread);
+        return reread;
+      }
     }
     const created = await this.#repository.create(buildMutationPlan({
       workflow: 'ready-visit',
@@ -454,6 +604,50 @@ export class MedplumDemoPersistence implements DemoPersistence {
     const reread = await this.#reread(created);
     this.#record(reread);
     return reread;
+  }
+
+  async #findByIdentifier<T extends Resource>(resourceType: T['resourceType'], identifier: Identifier): Promise<T | undefined> {
+    const existing = await this.#repository.searchByIdentifier<T>(resourceType, identifier);
+    if (existing.length > 1) throw new Error(`${resourceType} idempotency identifier is ambiguous`);
+    return existing[0];
+  }
+
+  async #ensureProvenance(target: Resource): Promise<Provenance> {
+    const versioned = requireVersionedReference(target);
+    const provenance = buildVersionedProvenance({
+      provenanceBusinessId: `${this.#runId}-${target.resourceType.toLowerCase()}`,
+      targetReference: versioned.reference,
+      targetVersionId: versioned.versionId,
+      recordedAt: this.#now(),
+      agentReference: DEMO_V1.practitionerRoleReference,
+    });
+    const businessIdentifier = provenance.extension?.find(
+      (extension) => extension.url === 'urn:vibedoc:provenance-business-identifier',
+    )?.valueIdentifier;
+    if (!businessIdentifier?.system || !businessIdentifier.value) {
+      throw new Error('Provenance requires a stable business identifier');
+    }
+    const tagged: Provenance = {
+      ...provenance,
+      meta: {
+        ...provenance.meta,
+        tag: [
+          ...(provenance.meta?.tag ?? []),
+          { system: 'urn:vibedoc:provenance-business-identifier', code: businessIdentifier.value },
+        ],
+      },
+    };
+    const conditional = await this.#repository.conditionalCreate(
+      tagged,
+      `_tag=${encodeURIComponent(`urn:vibedoc:provenance-business-identifier|${businessIdentifier.value}`)}`,
+    );
+    const committed = await this.#reread(conditional.resource);
+    const expectedTarget = `${versioned.reference}/_history/${versioned.versionId}`;
+    if (committed.target?.length !== 1 || committed.target[0]?.reference !== expectedTarget) {
+      throw new Error('Provenance does not target the exact committed resource version');
+    }
+    this.#record(committed);
+    return committed;
   }
 
   async #update<T extends Resource>(resource: T, expectedVersion: string, key: string): Promise<T> {

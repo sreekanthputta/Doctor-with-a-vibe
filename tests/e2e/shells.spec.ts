@@ -37,7 +37,7 @@ test.describe('VibeDoc four-shell demo', () => {
     await publicPage.getByRole('button', { name: /send request/i }).click();
     await expect(publicPage.getByRole('status')).toHaveText(/Book appointment completed/i);
     await publicPage.getByRole('button', { name: /Book appointment completed/i }).click();
-    await expect(publicPage.getByText(/Appointment recorded/i)).toBeVisible();
+    await expect(publicPage.getByText('Tuesday, August 4 at 10:30 AM')).toBeVisible();
 
     await patient.goto('/demo');
     await patient.getByRole('button', { name: /Continue as Maria Lopez/i }).click();
@@ -122,6 +122,8 @@ test.describe('VibeDoc four-shell demo', () => {
     await attacker.getByRole('button', { name: 'Continue' }).click();
     await expect(attacker.getByText(/front desk is temporarily unavailable/i)).toBeVisible();
     await expect(attacker.getByText('Maria Lopez', { exact: true })).toHaveCount(0);
+    const attackerTraces = await attacker.evaluate(async () => await fetch('/api/traces').then(async (response) => await response.text()));
+    expect(attackerTraces).toBe('[]');
 
     await owner.reload();
     await expect(owner.getByRole('textbox', { name: /message/i })).toBeVisible();

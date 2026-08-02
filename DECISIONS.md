@@ -102,3 +102,8 @@ Decision: after integrator Gate 0 freezes contracts, scripts, fixtures, route sh
 
 Status: accepted
 Decision: voice consent creates an application capability distinct from the role session. Revocation immediately invalidates that capability, closes the known provider/media session, denies new provider-token issuance, and rejects late or replayed tool events while typed administrative access continues. An already issued Deepgram token is allowed to expire under its provider TTL; VibeDoc does not claim provider-side instant revocation without live conformance evidence, and no provider token carries PHI or durable mutation authority.
+
+## D-020 — Accepted hackathon risk for completion-provider exception durability
+
+Status: accepted MEDIUM risk for the synthetic hackathon release only
+Decision: if the record provider fails during the valid member-ID completion step, VibeDoc keeps the authoritative visit in Needs attention, leaves the original required Task open, returns `503`, and exposes one owned, human-acknowledgeable provider-failure exception in the running process. That secondary exception and its acknowledgment are not durable when the same record provider is unavailable, so a restart may lose them; the persisted missing-member Task still blocks Ready and preserves the operational need. Production must add a durable recovery marker or out-of-band exception store before handling real patients. This risk does not permit a false Ready state or a claim that the exception was persisted.

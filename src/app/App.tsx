@@ -4,10 +4,11 @@ import { PatientWorkspaceShell } from '../ui/shells/patient-workspace/PatientWor
 import { PhysicianCockpitShell } from '../ui/shells/physician-cockpit/PhysicianCockpitShell';
 import { PublicAccessShell } from '../ui/shells/public-access/PublicAccessShell';
 import { SyntheticDemoAccessShell } from '../ui/shells/demo-access/SyntheticDemoAccessShell';
-import { completedBookingTrace, physicianVisits } from '../ui/fixtures/presentation';
+import { bookingTrace, physicianVisits } from '../ui/fixtures/presentation';
 import type { DemoWorkflowSnapshot } from '../server/demo-workflow-store';
-import type { ExceptionVM, PhysicianVisitVM } from '../ui/view-models';
+import type { ExceptionVM, PhysicianVisitVM, TraceVM } from '../ui/view-models';
 import type { SessionContext } from '../contracts/session';
+import { TracePresentationSchema, type TracePresentation } from '../contracts/trace';
 import { projectPersistedWorkflowEvidence } from '../ui/mappers/evidence-presentation';
 
 type ClientSession = Omit<SessionContext, 'sessionId'>;
@@ -16,6 +17,33 @@ async function readSnapshot(): Promise<DemoWorkflowSnapshot> {
   const response = await fetch('/api/demo/state', { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('Unable to load demo state');
   return await response.json() as DemoWorkflowSnapshot;
+}
+
+async function readTraceSnapshots(): Promise<TracePresentation[]> {
+  const response = await fetch('/api/traces', { credentials: 'same-origin', cache: 'no-store' });
+  if (!response.ok) throw new Error('Unable to load function traces');
+  return TracePresentationSchema.array().parse(await response.json());
+}
+
+function presentBookingTraces(
+  traces: readonly TracePresentation[],
+  providerMode: DemoWorkflowSnapshot['providerMode'],
+): TraceVM[] {
+  return traces
+    .filter((trace) => trace.toolName === 'book_appointment')
+    .map((trace) => {
+      const startedAt = trace.startedAt ? Date.parse(trace.startedAt) : Number.NaN;
+      const completedAt = trace.completedAt ? Date.parse(trace.completedAt) : Number.NaN;
+      const durationMs = Number.isFinite(startedAt) && Number.isFinite(completedAt)
+        ? Math.max(0, completedAt - startedAt)
+        : undefined;
+      return {
+        ...trace,
+        displayName: 'Book appointment',
+        providerMode,
+        ...(durationMs === undefined ? {} : { durationMs }),
+      };
+    });
 }
 
 async function bootstrapSession(path: '/api/session/public' | '/api/session/demo'): Promise<ClientSession> {
@@ -47,6 +75,7 @@ export function App(): React.JSX.Element {
   const [session, setSession] = useState<ClientSession>();
   const [loadFailed, setLoadFailed] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [publicTraces, setPublicTraces] = useState<TraceVM[]>([]);
 
   useEffect(() => {
     const initialize = async (): Promise<void> => {
@@ -68,7 +97,14 @@ export function App(): React.JSX.Element {
   }, [shell]);
 
   useEffect(() => {
-    if (shell === 'public' && session) void readSnapshot().then(setSnapshot).catch(() => setLoadFailed(true));
+    if (shell === 'public' && session) {
+      void Promise.all([readSnapshot(), readTraceSnapshots()])
+        .then(([nextSnapshot, nextTraces]) => {
+          setSnapshot(nextSnapshot);
+          setPublicTraces(presentBookingTraces(nextTraces, nextSnapshot.providerMode));
+        })
+        .catch(() => setLoadFailed(true));
+    }
   }, [session, shell]);
 
   if (shell === 'demo') {
@@ -155,18 +191,9 @@ export function App(): React.JSX.Element {
   return (
     <PublicAccessShell
       state={loadFailed ? 'error' : snapshot?.phase === 'stopped' ? 'stopped' : snapshot ? 'ready' : 'loading'}
-      providerMode="fixture"
+      providerMode={snapshot?.providerMode ?? 'fixture'}
       traceContextKey={`public:${snapshot?.phase ?? 'loading'}`}
-      traces={snapshot?.phase === 'needs-attention' || snapshot?.phase === 'ready'
-        ? [{
-          ...completedBookingTrace,
-          providerMode: snapshot.providerMode,
-          safeOutput: {
-            result: 'Appointment recorded',
-            source: snapshot.providerMode === 'live' ? 'Medplum live' : 'Medplum fixture',
-          },
-        }]
-        : []}
+      traces={publicTraces}
       stopCopy={snapshot?.stopCopy}
       stopHeading={snapshot?.exceptions[0]?.category === 'identity' ? 'Identity could not be confirmed' : undefined}
       onRunUncertainIdentity={() => {
@@ -180,7 +207,28 @@ export function App(): React.JSX.Element {
       }}
       onSubmit={(message) => {
         if (!session) return;
-        void mutateSnapshot('/api/demo/request', { message }, session.csrfToken).then(setSnapshot).catch(() => setLoadFailed(true));
+        const startedAt = new Date().toISOString();
+        const localRunningTrace: TraceVM = {
+          ...bookingTrace,
+          toolName: 'book_appointment',
+          startedAt,
+          providerMode: snapshot?.providerMode ?? 'fixture',
+          safeInput: { slotDisplay: 'Tuesday morning' },
+        };
+        setPublicTraces([localRunningTrace]);
+        void mutateSnapshot('/api/demo/request', { message }, session.csrfToken)
+          .then(async (next) => {
+            setSnapshot(next);
+            try {
+              const traces = await readTraceSnapshots();
+              setPublicTraces(presentBookingTraces(traces, next.providerMode));
+            } catch {
+              setPublicTraces([{ ...localRunningTrace, status: 'reconciling', providerMode: next.providerMode }]);
+            }
+          })
+          .catch(() => {
+            setPublicTraces([{ ...localRunningTrace, status: 'reconciling' }]);
+          });
       }}
     />
   );

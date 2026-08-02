@@ -24,6 +24,8 @@ const projections: Record<string, { input: readonly string[]; output: readonly s
 export class TraceStore {
   readonly #traces = new Map<string, InternalTrace>();
 
+  constructor(private readonly now: () => string = () => new Date().toISOString()) {}
+
   start(command: StartTrace): TracePresentation {
     const projection = this.#projection(command.toolName);
     const trace = TracePresentationSchema.parse({
@@ -31,6 +33,7 @@ export class TraceStore {
       messageId: command.messageId,
       toolName: command.toolName,
       status: 'running',
+      startedAt: this.now(),
       safeInput: pick(command.input, projection.input),
     });
     this.#traces.set(this.#key(command.sessionId, command.traceId), { ...trace, sessionId: command.sessionId, role: command.role });
@@ -38,6 +41,19 @@ export class TraceStore {
   }
 
   complete(sessionId: string, traceId: string, output: Record<string, unknown>): TracePresentation {
+    return this.#finish(sessionId, traceId, 'succeeded', output);
+  }
+
+  block(sessionId: string, traceId: string, output: Record<string, unknown>): TracePresentation {
+    return this.#finish(sessionId, traceId, 'blocked', output);
+  }
+
+  #finish(
+    sessionId: string,
+    traceId: string,
+    status: 'succeeded' | 'blocked',
+    output: Record<string, unknown>,
+  ): TracePresentation {
     const key = this.#key(sessionId, traceId);
     const existing = this.#traces.get(key);
     if (!existing) throw new Error('Trace not found');
@@ -46,7 +62,9 @@ export class TraceStore {
       traceId: existing.traceId,
       messageId: existing.messageId,
       toolName: existing.toolName,
-      status: 'succeeded',
+      status,
+      ...(existing.startedAt ? { startedAt: existing.startedAt } : {}),
+      completedAt: this.now(),
       safeInput: existing.safeInput,
       safeOutput: pick(output, projection.output),
     });

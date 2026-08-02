@@ -21,7 +21,7 @@ describe('PublicAccessShell', () => {
 
     expect(screen.getByText('One request. One ready visit.')).toBeInTheDocument();
     expect(screen.getByText(/automated administrative assistant/i)).toBeInTheDocument();
-    expect(screen.getByText('Deterministic fixture')).toBeInTheDocument();
+    expect(screen.getByText('Synthetic deterministic FHIR fixture')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Message the front desk'), 'Book an annual wellness visit');
     await user.click(screen.getByRole('button', { name: 'Send request' }));
     expect(onSubmit).toHaveBeenCalledWith('Book an annual wellness visit');

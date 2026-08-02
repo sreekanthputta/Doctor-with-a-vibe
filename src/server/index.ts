@@ -5,9 +5,12 @@ import process from 'node:process';
 import { z } from 'zod';
 import { MedplumClient } from '@medplum/core';
 import { parseServerEnv } from './env.js';
-import { DemoWorkflowStore } from './demo-workflow-store.js';
+import { DemoWorkflowStore, ProviderCompletionError } from './demo-workflow-store.js';
 import { MedplumDemoPersistence } from '../adapters/medplum-demo-persistence.js';
+import { MedplumFhirRepository } from '../adapters/medplum-fhir-repository.js';
+import { ensureLiveMedplumBaseline } from './live-medplum-baseline.js';
 import { SessionStore } from './session-store.js';
+import { TraceStore } from './trace-store.js';
 import type { SessionContext } from '../contracts/session.js';
 
 if (process.env.NODE_ENV !== 'production') config({ path: ['.env.local', '.env'], quiet: true });
@@ -18,17 +21,48 @@ const port = environment.port;
 const distPath = path.resolve(process.cwd(), 'dist');
 const livePersistences = await (async () => {
   if (!environment.useLiveMedplum) return {};
-  const client = new MedplumClient({ baseUrl: environment.medplumBaseUrl });
-  await client.startClientLogin(environment.medplumClientId!, environment.medplumClientSecret!);
-  const run = Date.now();
-  return {
-    demo: MedplumDemoPersistence.fromClient(client, { runId: `server-${run}` }),
-    identityException: MedplumDemoPersistence.fromClient(client, { runId: `identity-${run}` }),
-  };
+  try {
+    const client = new MedplumClient({ baseUrl: environment.medplumBaseUrl });
+    await client.startClientLogin(environment.medplumClientId!, environment.medplumClientSecret!);
+    const seedReferences = await ensureLiveMedplumBaseline(new MedplumFhirRepository(client));
+    return {
+      demo: MedplumDemoPersistence.fromClient(client, { runId: 'demo-v1-primary', seedReferences }),
+      identityException: MedplumDemoPersistence.fromClient(client, { runId: 'demo-v1-identity-exception', seedReferences }),
+    };
+  } catch {
+    process.stderr.write('Medplum startup unavailable; using the labeled deterministic fixture.\n');
+    return {};
+  }
 })();
 const demoWorkflow = new DemoWorkflowStore(undefined, undefined, livePersistences.demo);
 const identityExceptionWorkflow = new DemoWorkflowStore(undefined, undefined, livePersistences.identityException);
+if (livePersistences.demo) {
+  try {
+    const restored = await livePersistences.demo.restore();
+    if (restored) demoWorkflow.hydratePersisted(restored);
+  } catch {
+    process.stderr.write('Existing Medplum demo state could not be reconciled; new writes remain fail-closed.\n');
+  }
+}
+if (livePersistences.identityException) {
+  try {
+    const restored = await livePersistences.identityException.restoreException(
+      'resolve-uncertain-identity',
+      'demo-v1:exception:identity:uncertain',
+    );
+    if (restored) {
+      identityExceptionWorkflow.hydrateException(restored.snapshot, {
+        id: 'demo-v1:exception:identity:uncertain',
+        category: 'identity',
+        status: restored.status,
+      });
+    }
+  } catch {
+    process.stderr.write('Existing Medplum identity exception could not be reconciled; acknowledgment remains blocked.\n');
+  }
+}
 const sessions = new SessionStore();
+const traces = new TraceStore();
 const demoRequestSchema = z.object({ message: z.string().trim().min(1) }).strict();
 const memberIdSchema = z.object({ memberId: z.string() }).strict();
 const transitionSchema = z.object({ persona: z.enum(['maria-demo', 'maya-demo']) }).strict();
@@ -41,6 +75,18 @@ const identitySchema = z.object({
 const sessionCookieName = '__Host-vibedoc_session';
 let publicWorkflowOwnerSessionId: string | undefined;
 let identityExceptionOwnerSessionId: string | undefined;
+let acceptingMutations = true;
+
+function releaseExpiredWorkflowOwners(): void {
+  if (publicWorkflowOwnerSessionId && !sessions.isActive(publicWorkflowOwnerSessionId)) {
+    traces.clearSession(publicWorkflowOwnerSessionId);
+    publicWorkflowOwnerSessionId = undefined;
+  }
+  if (identityExceptionOwnerSessionId && !sessions.isActive(identityExceptionOwnerSessionId)) {
+    traces.clearSession(identityExceptionOwnerSessionId);
+    identityExceptionOwnerSessionId = undefined;
+  }
+}
 
 function physicianSnapshot(): ReturnType<DemoWorkflowStore['snapshot']> {
   const primary = demoWorkflow.snapshot();
@@ -115,21 +161,30 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '16kb' }));
 app.use('/api', (_request, response, next) => {
   response.setHeader('Cache-Control', 'no-store');
+  if (!acceptingMutations && _request.method !== 'GET') {
+    return response.status(503).json({ error: 'Service is draining; retry the operation' });
+  }
   next();
 });
 app.get('/health', (_request, response) => {
   response.status(200).json({ status: 'ok', service: 'vibedoc' });
 });
 app.get('/api/demo/state', (_request, response) => {
+  releaseExpiredWorkflowOwners();
   const session = currentSession(_request);
   if (!session) return response.status(401).json({ error: 'A demo session is required' });
   if (session.role === 'demo-access') return response.status(403).json({ error: 'Choose a demo persona first' });
   if (session.role === 'public') {
     if (session.sessionId === publicWorkflowOwnerSessionId) return response.status(200).json(demoWorkflow.snapshot());
     if (session.sessionId === identityExceptionOwnerSessionId) return response.status(200).json(identityExceptionWorkflow.snapshot());
-    return response.status(200).json({ phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false, providerMode: environment.useLiveMedplum ? 'live' : 'fixture' });
+    return response.status(200).json({ phase: 'empty', exceptions: [], resourceEvidence: [], identityVerified: false, providerMode: livePersistences.demo ? 'live' : 'fixture' });
   }
   return response.status(200).json(session.role === 'physician-demo' ? physicianSnapshot() : demoWorkflow.snapshot());
+});
+app.get('/api/traces', (request, response) => {
+  const session = currentSession(request);
+  if (!session) return response.status(401).json({ error: 'A demo session is required' });
+  return response.status(200).json(traces.snapshot(session.sessionId, session.role));
 });
 app.get('/api/session/public', (request, response) => {
   bootstrapSession(request, response, 'public');
@@ -148,6 +203,7 @@ app.post('/api/session/transition', (request, response) => {
   if (!parsed.success) return response.status(400).json({ error: 'Unknown synthetic persona' });
   const sessionId = cookieSessionId(request);
   if (!sessionId) return response.status(401).json({ error: 'Demo session is required' });
+  traces.clearSession(sessionId);
   const session = parsed.data.persona === 'maria-demo'
     ? sessions.replace(sessionId, 'patient-demo', 'maria-demo')
     : sessions.replace(sessionId, 'physician-demo', 'maya-demo');
@@ -160,6 +216,8 @@ app.post('/api/demo/reset', async (request, response) => {
   }
   const result = await demoWorkflow.reset();
   await identityExceptionWorkflow.reset();
+  if (publicWorkflowOwnerSessionId) traces.clearSession(publicWorkflowOwnerSessionId);
+  if (identityExceptionOwnerSessionId) traces.clearSession(identityExceptionOwnerSessionId);
   publicWorkflowOwnerSessionId = undefined;
   identityExceptionOwnerSessionId = undefined;
   response.status(200).json(result);
@@ -170,11 +228,20 @@ app.post('/api/demo/identity', async (request, response) => {
   if (!parsed.success) return response.status(400).json({ error: 'Valid synthetic identity fields are required' });
   const sessionId = cookieSessionId(request);
   if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
+  releaseExpiredWorkflowOwners();
   if (publicWorkflowOwnerSessionId && publicWorkflowOwnerSessionId !== sessionId) {
     return response.status(409).json({ error: 'Another synthetic workflow is already active' });
   }
   const result = await demoWorkflow.submitIdentity(parsed.data);
-  if (result.identityVerified || result.phase === 'stopped') publicWorkflowOwnerSessionId = sessionId;
+  if (result.phase === 'stopped') {
+    if (identityExceptionOwnerSessionId && identityExceptionOwnerSessionId !== sessionId) {
+      return response.status(409).json({ error: 'Another synthetic exception workflow is already active' });
+    }
+    const identityException = await identityExceptionWorkflow.submitUncertainIdentityReplay();
+    identityExceptionOwnerSessionId = sessionId;
+    return response.status(200).json(identityException);
+  }
+  if (result.identityVerified) publicWorkflowOwnerSessionId = sessionId;
   return response.status(200).json(result);
 });
 app.post('/api/demo/request', async (request, response) => {
@@ -183,17 +250,33 @@ app.post('/api/demo/request', async (request, response) => {
   if (!sessionId || sessionId !== publicWorkflowOwnerSessionId) return response.status(403).json({ error: 'This session does not own the workflow' });
   const parsed = demoRequestSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json({ error: 'A message is required' });
+  const traceId = 'demo-v1:trace:book-appointment';
+  traces.start({
+    sessionId,
+    role: 'public',
+    traceId,
+    messageId: 'demo-v1:message:booking',
+    toolName: 'book_appointment',
+    input: { slotDisplay: 'Tuesday morning' },
+  });
   try {
     const result = await demoWorkflow.submitRequest(parsed.data.message);
+    if (result.phase === 'stopped') {
+      traces.block(sessionId, traceId, { appointmentDisplay: 'No appointment mutation performed' });
+    } else {
+      traces.complete(sessionId, traceId, { appointmentDisplay: 'Tuesday, August 4 at 10:30 AM' });
+    }
     return response.status(200).json(result);
   } catch {
-    return response.status(409).json({ error: 'Verify identity before scheduling' });
+    traces.block(sessionId, traceId, { appointmentDisplay: 'No appointment mutation confirmed' });
+    return response.status(503).json({ error: 'Scheduling could not be confirmed; the owned exception is visible to the physician' });
   }
 });
 app.post('/api/demo/identity-replay', async (request, response) => {
   if (!authorizeMutation(request, 'public')) return response.status(403).json({ error: 'Public session is required' });
   const sessionId = cookieSessionId(request);
   if (!sessionId) return response.status(401).json({ error: 'Public session is required' });
+  releaseExpiredWorkflowOwners();
   if (identityExceptionOwnerSessionId && identityExceptionOwnerSessionId !== sessionId) {
     return response.status(409).json({ error: 'Another synthetic workflow is already active' });
   }
@@ -207,7 +290,12 @@ app.post('/api/demo/exceptions/:exceptionId/acknowledge', async (request, respon
     await identityExceptionWorkflow.acknowledgeException(request.params.exceptionId);
     return response.status(200).json(physicianSnapshot());
   } catch {
-    return response.status(404).json({ error: 'Exception was not found' });
+    try {
+      await demoWorkflow.acknowledgeException(request.params.exceptionId);
+      return response.status(200).json(physicianSnapshot());
+    } catch {
+      return response.status(404).json({ error: 'Exception was not found' });
+    }
   }
 });
 app.post('/api/demo/member-id', async (request, response) => {
@@ -217,7 +305,10 @@ app.post('/api/demo/member-id', async (request, response) => {
   try {
     const result = await demoWorkflow.submitMemberId(parsed.data.memberId);
     return response.status(200).json(result);
-  } catch {
+  } catch (error) {
+    if (error instanceof ProviderCompletionError) {
+      return response.status(503).json({ error: 'Eligibility could not be confirmed; an owned physician exception was created' });
+    }
     return response.status(400).json({ error: 'The synthetic member ID was not accepted' });
   }
 });
@@ -230,7 +321,14 @@ app.use((request, response, next) => {
 const server = app.listen(port, '0.0.0.0');
 
 function shutdown(): void {
-  server.close(() => process.exit(0));
+  if (!acceptingMutations) return;
+  acceptingMutations = false;
+  const forcedExit = setTimeout(() => process.exit(1), 10_000);
+  forcedExit.unref();
+  server.close(() => {
+    clearTimeout(forcedExit);
+    process.exit(0);
+  });
 }
 
 process.on('SIGTERM', shutdown);

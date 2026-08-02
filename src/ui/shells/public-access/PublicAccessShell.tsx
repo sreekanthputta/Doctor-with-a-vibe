@@ -8,8 +8,8 @@ const SAFETY_COPY =
   'VibeDoc cannot assess symptoms or emergencies. Do not wait for a reply. If you may be experiencing an emergency, call 911 or your local emergency number now. For other clinical concerns, contact a qualified healthcare professional.';
 
 const providerLabels: Record<ProviderMode, string> = {
-  live: 'Live voice',
-  fixture: 'Deterministic fixture',
+  live: 'Medplum live committed resources',
+  fixture: 'Synthetic deterministic FHIR fixture',
   prerecorded: 'Prerecorded replay',
 };
 
