@@ -27,6 +27,20 @@ describe('closed administrative grammar', () => {
     });
   });
 
+  it('accepts the exact documented stage request as the bounded demo scheduling intent', () => {
+    const originalText = 'I’m a new patient. I want an annual wellness visit next Tuesday morning and I have Aetna.';
+
+    expect(evaluateAdministrativeText(originalText, { workflowRunId: 'run-stage' })).toEqual({
+      action: 'continue',
+      originalText,
+      intent: {
+        kind: 'annual-wellness-request',
+        preferredDate: '2026-08-04',
+        timeOfDay: 'morning',
+      },
+    });
+  });
+
   it.each([
     ['I need an annual welness vist', 'administrative-unmatched'],
     ['I do not want an annual wellness visit', 'administrative-unmatched'],
@@ -36,7 +50,10 @@ describe('closed administrative grammar', () => {
     ['I have dizziness', 'clinical-language'],
     ['I have nausea', 'clinical-language'],
     ['I am feeling off', 'clinical-language'],
+    ['Something is wrong with me', 'clinical-language'],
+    ['My stomach keeps cramping', 'clinical-language'],
     ['Book an annual wellness visit and check this rash', 'mixed-clinical-administrative'],
+    ['Book an annual wellness visit because something is wrong with me', 'mixed-clinical-administrative'],
     ['I need an annual wellness visit in the morning and I feel off', 'mixed-clinical-administrative'],
   ] as const)('fails closed with a category-preserving exception: %s', (input, category) => {
     const result = evaluateAdministrativeText(input, { workflowRunId: 'run-1' });

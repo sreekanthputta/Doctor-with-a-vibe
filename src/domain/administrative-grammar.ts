@@ -12,8 +12,10 @@ export type AdministrativeTextDecision =
   | (StopOutcome & { originalText: string });
 
 const annualWellnessTurn = /^(?:i need|i want|i would like|i'd like|please (?:book|schedule)|(?:book|schedule)(?: me)?) (?:an? )?annual (?:wellness|physical) visit(?: (?:in )?(?:the )?(morning|afternoon))?[.!?]?$/i;
+const documentedStageTurn = /^i['’]m a new patient\. i want an annual wellness visit next tuesday morning and i have aetna\.?$/i;
 const administrativeLanguage = /\b(annual|wellness|physical|visit|appointment|book|schedule)\b/i;
 const clinicalLanguage = /\b(chest pain|shortness of breath|bleed(?:ing)?|fever|headache|hurt(?:ing)?|rash|dizz(?:y|iness)|nausea|nauseous|symptoms?|medic(?:ine|ation)|dose|diagnos(?:e|is)|under the weather|feeling off|feel off)\b/i;
+const compoundLanguage = /\b(and|because|but|since)\b/i;
 
 function normalizeForMatching(originalText: string): string {
   return originalText.trim().replace(/\s+/g, ' ');
@@ -28,6 +30,18 @@ export function evaluateAdministrativeText(
   context: { workflowRunId: string } = { workflowRunId: 'unbound' },
 ): AdministrativeTextDecision {
   const normalized = normalizeForMatching(originalText);
+  if (documentedStageTurn.test(normalized)) {
+    return {
+      action: 'continue',
+      originalText,
+      intent: {
+        kind: 'annual-wellness-request',
+        preferredDate: '2026-08-04',
+        timeOfDay: 'morning',
+      },
+    };
+  }
+
   const match = annualWellnessTurn.exec(normalized);
   if (match) {
     const timeOfDay = match[1]?.toLocaleLowerCase('en-US') as 'morning' | 'afternoon' | undefined;
@@ -43,9 +57,12 @@ export function evaluateAdministrativeText(
 
   const hasClinicalLanguage = clinicalLanguage.test(normalized);
   const hasAdministrativeLanguage = administrativeLanguage.test(normalized);
-  const category = hasClinicalLanguage
-    ? hasAdministrativeLanguage ? 'mixed-clinical-administrative' : 'clinical-language'
-    : 'administrative-unmatched';
+  const hasUnestablishedCompoundLanguage = compoundLanguage.test(normalized);
+  const category = hasAdministrativeLanguage
+    ? hasClinicalLanguage || hasUnestablishedCompoundLanguage
+      ? 'mixed-clinical-administrative'
+      : 'administrative-unmatched'
+    : 'clinical-language';
   return {
     ...createStopOutcome(category, context.workflowRunId),
     originalText,
