@@ -32,6 +32,8 @@ RED: `npm test -- tests/integration/medplum-demo-persistence.test.ts` produced s
 
 GREEN: the same command passes 11/11 tests. `npm run typecheck` passes.
 
+Lane merge gate: `npm test -- src/fhir tests/integration/medplum-demo-persistence.test.ts tests/integration/medplum-repository.test.ts` passes 57/57 tests across 13 files; `npm run lint` passes.
+
 ## Implementation
 
 - Deadlines are derived from the injected clock plus the frozen four-hour policy.
