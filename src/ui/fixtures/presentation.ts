@@ -171,6 +171,7 @@ export const physicianVisits: readonly PhysicianVisitVM[] = Object.freeze([
       sourceTimestamp: '2026-08-01T15:10:04-05:00',
       transactionState: 'completed',
       providerMode: 'fixture',
+      sourceIdentifier: 'fixture:demo-v1:eligibility:maria',
       summary: 'Request → Response → Coverage',
     }),
     securityEvent: Object.freeze({

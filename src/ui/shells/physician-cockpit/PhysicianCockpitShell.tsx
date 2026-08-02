@@ -5,6 +5,7 @@ import { ReadyVisitRail } from '../../components/ReadyVisitRail';
 import { ShellFrame } from '../../components/ShellFrame';
 import { SurfaceStatePanel } from '../../components/SurfaceStatePanel';
 import type { ExceptionVM, PhysicianVisitVM, SurfaceState } from '../../view-models';
+import { isVisitReady } from '../../readiness';
 
 type PhysicianCockpitShellProps = Readonly<{
   state: SurfaceState;
@@ -23,6 +24,7 @@ export function PhysicianCockpitShell({
 }: PhysicianCockpitShellProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExceptions, setShowExceptions] = useState(false);
+  const [openedVisitId, setOpenedVisitId] = useState<string>();
   const cockpitRef = useRef<HTMLDivElement>(null);
 
   const handleShortcut = useCallback((event: KeyboardEvent) => {
@@ -41,7 +43,10 @@ export function PhysicianCockpitShell({
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const selected = visits[selectedIndex];
-      if (selected) onOpenVisit(selected.appointmentBusinessId);
+      if (selected) {
+        setOpenedVisitId(selected.appointmentBusinessId);
+        onOpenVisit(selected.appointmentBusinessId);
+      }
     }
   }, [onOpenVisit, selectedIndex, visits]);
 
@@ -78,6 +83,8 @@ export function PhysicianCockpitShell({
       </ShellFrame>
     );
   }
+  const selectedIsReady = isVisitReady(selectedVisit);
+  const selectedIsOpen = openedVisitId === selectedVisit.appointmentBusinessId;
 
   return (
     <ShellFrame shell="physician" eyebrow="Dr. Maya Chen" title="Physician cockpit">
@@ -96,25 +103,41 @@ export function PhysicianCockpitShell({
             </button>
           </div>
           <ul className="vd-list-reset">
-            {visits.map((visit, index) => (
+            {visits.map((visit, index) => {
+              const visitIsReady = isVisitReady(visit);
+              return (
               <li key={visit.appointmentBusinessId} aria-current={index === selectedIndex ? 'true' : undefined}>
                 <button type="button" onClick={() => setSelectedIndex(index)}>
                   <span>{visit.patientDisplay}</span>
-                  <span>{visit.status === 'ready' ? '✓ Ready' : '! Needs attention'}</span>
+                  <span>{visitIsReady ? '✓ Ready' : '! Needs attention'}</span>
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </nav>
 
         <section className="vd-cockpit__workspace" aria-labelledby="workspace-title">
-          <p className="vd-eyebrow">Suggested next visit</p>
-          <h2 id="workspace-title">{selectedVisit.patientDisplay}</h2>
-          <p>Selection is read-only until you choose Open visit. No recording is active.</p>
+          <div className="vd-workspace-heading">
+            <div>
+              <p className="vd-eyebrow">Suggested next visit</p>
+              <h2 id="workspace-title">{selectedVisit.patientDisplay}</h2>
+            </div>
+            <span className={`vd-ready-pill vd-ready-pill--${selectedIsReady ? 'ready' : 'needs-attention'}`}>
+              {selectedIsReady ? 'Ready' : 'Needs attention'}
+            </span>
+          </div>
+          <p>{selectedIsOpen ? 'Visit opened for read-only evidence review.' : 'Suggested selection is read-only.'} No recording is active.</p>
           <ReadyVisitRail visit={selectedVisit} />
-          <button type="button" onClick={() => onOpenVisit(selectedVisit.appointmentBusinessId)}>
-            Open visit
-          </button>
+          <div className="vd-workspace-actions">
+            <button type="button" onClick={() => {
+              setOpenedVisitId(selectedVisit.appointmentBusinessId);
+              onOpenVisit(selectedVisit.appointmentBusinessId);
+            }} disabled={selectedIsOpen}>
+              {selectedIsOpen ? 'Visit open · read-only' : 'Open visit'}
+            </button>
+            <span><kbd>Enter</kbd> open · <kbd>J</kbd>/<kbd>K</kbd> navigate · <kbd>E</kbd> exceptions</span>
+          </div>
         </section>
 
         <aside className="vd-cockpit__evidence" aria-label="Physician evidence and exceptions">

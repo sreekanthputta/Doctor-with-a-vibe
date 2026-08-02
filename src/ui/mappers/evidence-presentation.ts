@@ -16,6 +16,7 @@ export type PersistedResourceEvidenceInput = Readonly<{
   sourceUpdatedAt: string;
   workflowRole: string;
   businessIdentifier?: string;
+  sourceIdentifier?: string;
 }>;
 
 type EvidencePresentation = Readonly<{
@@ -150,13 +151,18 @@ export function projectPersistedWorkflowEvidence(input: Readonly<{
     linkageSummary: 'Coverage updated → eligibility evidence persisted → original Task completed.',
   } : undefined;
 
-  const eligibilityLinkage = input.workflowStatus === 'ready' && request && response && coverage ? {
+  const eligibilitySource = response?.sourceIdentifier;
+  const eligibilityProvider = eligibilitySource?.startsWith('fixture:')
+    ? 'fixture' as const
+    : eligibilitySource?.startsWith('stedi-test:') ? 'stedi-test' as const : undefined;
+  const eligibilityLinkage = input.workflowStatus === 'ready' && request && response && coverage && eligibilitySource && eligibilityProvider ? {
     requestReference: request.reference,
     responseReference: response.reference,
     coverageReference: coverage.reference,
     sourceTimestamp: response.sourceUpdatedAt,
     transactionState: 'completed' as const,
-    providerMode: input.persistence === 'medplum-live' ? 'live' as const : 'fixture' as const,
+    providerMode: eligibilityProvider,
+    sourceIdentifier: eligibilitySource,
     summary: 'Request → Response → Coverage' as const,
   } : undefined;
 

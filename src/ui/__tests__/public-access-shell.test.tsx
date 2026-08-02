@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PublicAccessShell } from '../shells/public-access/PublicAccessShell';
 import { bookingTrace } from '../fixtures/presentation';
+import { physicianVisits } from '../fixtures/presentation';
 import './test-cleanup';
 
 describe('PublicAccessShell', () => {
@@ -22,9 +23,31 @@ describe('PublicAccessShell', () => {
     expect(screen.getByText('One request. One ready visit.')).toBeInTheDocument();
     expect(screen.getByText(/automated administrative assistant/i)).toBeInTheDocument();
     expect(screen.getByText('Synthetic deterministic FHIR fixture')).toBeInTheDocument();
+    expect(screen.getByText('Voice unavailable — continue by typing')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /talk to the front desk/i })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Message the front desk'), 'Book an annual wellness visit');
     await user.click(screen.getByRole('button', { name: 'Send request' }));
     expect(onSubmit).toHaveBeenCalledWith('Book an annual wellness visit');
+  });
+
+  it('shows a clear bridge from a booked appointment to demo access', async () => {
+    const user = userEvent.setup();
+    const onContinueToDemo = vi.fn();
+    render(
+      <PublicAccessShell
+        state="ready"
+        providerMode="fixture"
+        traceContextKey="public:session-a"
+        traces={[bookingTrace]}
+        bookedVisit={physicianVisits[0]}
+        onContinueToDemo={onContinueToDemo}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Your annual-wellness visit is booked' })).toBeInTheDocument();
+    expect(screen.getByText(/one required insurance field remains/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue to Synthetic Demo Access' }));
+    expect(onContinueToDemo).toHaveBeenCalledOnce();
   });
 
   it('shows the fixed safety stop copy without personalized advice', () => {

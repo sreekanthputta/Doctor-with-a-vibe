@@ -6,7 +6,10 @@ test.describe('VibeDoc four-shell demo', () => {
   });
 
   test('public access is synthetic and offers typed administrative access', async ({ page }) => {
-    await page.goto('/');
+    const response = await page.goto('/');
+    expect(response?.headers()['content-security-policy']).toBe("frame-ancestors 'none'");
+    expect(response?.headers()['x-frame-options']).toBe('DENY');
+    expect(response?.headers()['x-content-type-options']).toBe('nosniff');
     await expect(page.getByText(/synthetic data/i)).toBeVisible();
     await expect(page.getByRole('heading', { name: /One request\. One ready visit/i })).toBeVisible();
     await expect(page.getByLabel(/first name/i)).toBeVisible();
@@ -47,7 +50,9 @@ test.describe('VibeDoc four-shell demo', () => {
     await publicPage.getByRole('button', { name: /send request/i }).click();
     await expect(publicPage.getByRole('status')).toHaveText(/Book appointment completed/i);
     await publicPage.getByRole('button', { name: /Book appointment completed/i }).click();
-    await expect(publicPage.getByText('Tuesday, August 4 at 10:30 AM')).toBeVisible();
+    await expect(publicPage.getByText('Tuesday, August 4 at 10:30 AM', { exact: true })).toBeVisible();
+    await expect(publicPage.getByRole('heading', { name: 'Your annual-wellness visit is booked' })).toBeVisible();
+    await expect(publicPage.getByText('Voice unavailable — continue by typing')).toBeVisible();
 
     await patient.goto('/demo');
     await patient.getByRole('button', { name: /Continue as Maria Lopez/i }).click();
@@ -64,6 +69,11 @@ test.describe('VibeDoc four-shell demo', () => {
     await expect(physician.getByText(/suggested next visit/i)).toBeVisible();
     await expect(physician.getByText(/Updated:/i)).toBeVisible();
     await expect(physician.getByRole('status')).toHaveText('Ready');
+    await expect(physician.getByRole('heading', { name: 'Completed administrative work' })).toBeVisible();
+    await expect(physician.getByText('✓ Missing member-ID follow-up requested and delivered', { exact: true })).toBeVisible();
+    await expect(physician.getByText(/original required-field Task completed/i)).toBeVisible();
+    await expect(physician.getByText(/CommunicationRequest\//).first()).toBeVisible();
+    await expect(physician.getByText(/Communication\//).first()).toBeVisible();
 
     const unrelatedPublicContext = await browser.newContext();
     const unrelatedPublic = await unrelatedPublicContext.newPage();

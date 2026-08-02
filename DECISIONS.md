@@ -80,8 +80,8 @@ Decision: compact function rows appear beneath the initiating assistant message 
 
 ## D-015 — Palette awaits visual-direction approval
 
-Status: accepted
-Decision: preserve the patient/physician information architecture and interaction hierarchy, but do not implement the earlier ivory/sage/teal palette. Generate and compare explicit visual directions under `design/variants/`; freeze global color tokens only after user approval or an instructed blend.
+Status: superseded by D-021
+Decision: preserve the patient/physician information architecture and interaction hierarchy, but do not implement concrete palette values until visual-direction approval.
 
 ## D-016 — Four page shells, contextual detail
 
@@ -107,3 +107,8 @@ Decision: voice consent creates an application capability distinct from the role
 
 Status: accepted MEDIUM risk for the synthetic hackathon release only
 Decision: if the record provider fails during the valid member-ID completion step, VibeDoc keeps the authoritative visit in Needs attention, leaves the original required Task open, returns `503`, and exposes one owned, human-acknowledgeable provider-failure exception in the running process. That secondary exception and its acknowledgment are not durable when the same record provider is unavailable, so a restart may lose them; the persisted missing-member Task still blocks Ready and preserves the operational need. Production must add a durable recovery marker or out-of-band exception store before handling real patients. This risk does not permit a false Ready state or a claim that the exception was persisted.
+
+## D-021 — Approved dual-surface visual direction
+
+Status: accepted
+Decision: following the user's instruction to finish the previously deferred UI, use a coordinated dual-surface system: pearl/warm-white patient and demo surfaces with ink, teal, and mint; a graphite Cursor-inspired physician cockpit with white, slate, electric mint, and restrained amber. Green communicates confirmed readiness/action, amber communicates Needs attention, and red remains reserved for stopped/failed states. Both surfaces retain shared brand chrome, status vocabulary, focus treatment, reduced motion, and non-color status indicators.

@@ -10,13 +10,14 @@ import type { ExceptionVM, PhysicianVisitVM, TraceVM } from '../ui/view-models';
 import type { SessionContext } from '../contracts/session';
 import { TracePresentationSchema, type TracePresentation } from '../contracts/trace';
 import { projectPersistedWorkflowEvidence } from '../ui/mappers/evidence-presentation';
+import { parseDemoWorkflowSnapshot } from './demo-snapshot';
 
 type ClientSession = Omit<SessionContext, 'sessionId'>;
 
 async function readSnapshot(): Promise<DemoWorkflowSnapshot> {
   const response = await fetch('/api/demo/state', { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('Unable to load demo state');
-  return await response.json() as DemoWorkflowSnapshot;
+  return parseDemoWorkflowSnapshot(await response.json());
 }
 
 async function readTraceSnapshots(): Promise<TracePresentation[]> {
@@ -66,7 +67,7 @@ async function mutateSnapshot(path: string, body: Record<string, string>, csrfTo
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error('Demo mutation was rejected');
-  return await response.json() as DemoWorkflowSnapshot;
+  return parseDemoWorkflowSnapshot(await response.json());
 }
 
 export function App(): React.JSX.Element {
@@ -135,7 +136,7 @@ export function App(): React.JSX.Element {
         sourceLabel={snapshot?.providerMode === 'live' ? 'Medplum · live committed resources' : 'Synthetic deterministic FHIR fixture'}
         onSubmitMemberId={(memberId) => {
           if (!session) return;
-          void mutateSnapshot('/api/demo/member-id', { memberId }, session.csrfToken).then(setSnapshot).catch(() => setLoadFailed(true));
+          return mutateSnapshot('/api/demo/member-id', { memberId }, session.csrfToken).then(setSnapshot).catch(() => setLoadFailed(true));
         }}
       />
     );
@@ -230,6 +231,8 @@ export function App(): React.JSX.Element {
             setPublicTraces([{ ...localRunningTrace, status: 'reconciling' }]);
           });
       }}
+      bookedVisit={snapshot?.phase === 'needs-attention' || snapshot?.phase === 'ready' ? snapshot.visit : undefined}
+      onContinueToDemo={() => window.location.assign('/demo')}
     />
   );
 }

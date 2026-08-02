@@ -34,10 +34,14 @@ export function SyntheticDemoAccessShell({
         <p>This is a persona selector, not authentication. It contains no real patient information.</p>
         <div className="vd-persona-grid">
           <button type="button" className="patient-target" onClick={() => onSelectPersona('maria-demo')}>
-            Continue as Maria Lopez · synthetic patient
+            <span className="vd-persona-icon" aria-hidden="true">ML</span>
+            <span><strong>Continue as Maria Lopez</strong><small>Synthetic patient workspace</small></span>
+            <span aria-hidden="true">→</span>
           </button>
           <button type="button" onClick={() => onSelectPersona('maya-demo')}>
-            Continue as Dr. Maya Chen · synthetic physician
+            <span className="vd-persona-icon vd-persona-icon--doctor" aria-hidden="true">MC</span>
+            <span><strong>Continue as Dr. Maya Chen</strong><small>Synthetic physician cockpit</small></span>
+            <span aria-hidden="true">→</span>
           </button>
         </div>
       </section>

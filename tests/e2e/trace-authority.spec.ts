@@ -46,7 +46,7 @@ test('booking trace starts locally and resolves from the sanitized server snapsh
   releaseBooking();
   await expect(page.getByRole('status')).toHaveText(/Book appointment completed/i);
   await page.getByRole('button', { name: /Book appointment completed/i }).click();
-  await expect(page.getByText('Tuesday, August 4 at 10:30 AM')).toBeVisible();
-  await expect(page.getByText('Appointment recorded')).toHaveCount(0);
+  await expect(page.getByText('Tuesday, August 4 at 10:30 AM', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your annual-wellness visit is booked' })).toBeVisible();
   expect(traceSnapshotReads).toBeGreaterThan(0);
 });

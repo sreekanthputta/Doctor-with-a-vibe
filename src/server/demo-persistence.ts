@@ -11,6 +11,7 @@ export type PersistedResourceEvidence = {
   version: string;
   sourceUpdatedAt: string;
   workflowRole: string;
+  sourceIdentifier?: string;
 };
 
 export type DemoPersistenceSnapshot = {

@@ -100,7 +100,7 @@ The neutral `/demo` shell never carries patient or physician authority. Choosing
 
 ## Patient dashboard
 
-Use a quiet neutral canvas, high-contrast typography, restrained cards, generous spacing, and a dominant next-visit card. The accent palette remains intentionally unfrozen until one of the generated direction studies is approved:
+Use a quiet pearl canvas, high-contrast ink typography, restrained white cards, generous spacing, teal/mint interaction accents, and a dominant next-visit card:
 
 ```text
 Tuesday, August 4 · 10:30 AM
@@ -230,8 +230,8 @@ Moss may accelerate public-label passage retrieval, but no Moss similarity score
 
 ### Patient surface
 
-- Quiet neutral background and high-contrast text
-- One approved accent family after visual-direction review
+- Pearl/warm-white background and high-contrast ink text
+- Teal and mint interaction/focus accent family
 - Completion and attention states use icon, label, and shape in addition to color
 - Red only for a stopped or failed workflow
 - Rounded 16–20px cards
@@ -240,17 +240,15 @@ Moss may accelerate public-label passage retrieval, but no Moss similarity score
 
 ### Physician surface
 
-- Dark or high-contrast workspace derived from the approved visual direction
+- Graphite Cursor-inspired workspace with white/slate typography
 - Layered panels with subtle one-pixel borders
-- One shared focus/accent color from the approved direction
+- Electric mint shared focus/action color
 - Attention state distinct from destructive/failure state
 - Red only for actual stop/failure states
 - Compact typography and square controls
 - Monospace only for technical metadata
 
-Both surfaces share the logo, Ready Visit Rail, status vocabulary, and source/provenance iconography.
-
-Generated palette explorations live in `design/variants/`. No palette is implementation-approved until the user selects one or requests a blend.
+Both surfaces share the VibeDoc mark, Ready Visit Rail, status vocabulary, source/provenance presentation, visible focus treatment, and reduced-motion behavior. Confirmed readiness uses green plus icon/label/shape; Needs attention uses restrained amber plus icon/label/shape; stopped/failed states alone use red.
 
 ## UI module and test boundary
 

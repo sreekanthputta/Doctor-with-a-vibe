@@ -3,6 +3,7 @@ import { FunctionTraceGroup } from '../../components/FunctionTraceGroup';
 import { ShellFrame } from '../../components/ShellFrame';
 import { SurfaceStatePanel } from '../../components/SurfaceStatePanel';
 import type { ProviderMode, PublicSurfaceState, TraceVM } from '../../view-models';
+import type { ReadyVisitVM } from '../../../contracts/ready-visit';
 
 const SAFETY_COPY =
   'VibeDoc cannot assess symptoms or emergencies. Do not wait for a reply. If you may be experiencing an emergency, call 911 or your local emergency number now. For other clinical concerns, contact a qualified healthcare professional.';
@@ -12,6 +13,11 @@ const providerLabels: Record<ProviderMode, string> = {
   fixture: 'Synthetic deterministic FHIR fixture',
   prerecorded: 'Prerecorded replay',
 };
+
+const appointmentFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  timeZone: 'America/Chicago',
+});
 
 function formString(data: FormData, key: string): string {
   const value = data.get(key);
@@ -29,6 +35,8 @@ type PublicAccessShellProps = Readonly<{
   onRunUncertainIdentity?: () => void;
   identityVerified?: boolean;
   onSubmitIdentity?: (identity: { givenName: string; familyName: string; birthDate: string; postalCode: string }) => void;
+  bookedVisit?: ReadyVisitVM;
+  onContinueToDemo?: () => void;
 }>;
 
 export function PublicAccessShell({
@@ -42,6 +50,8 @@ export function PublicAccessShell({
   onRunUncertainIdentity,
   identityVerified = true,
   onSubmitIdentity,
+  bookedVisit,
+  onContinueToDemo,
 }: PublicAccessShellProps): React.JSX.Element {
   const [message, setMessage] = useState('');
 
@@ -64,11 +74,17 @@ export function PublicAccessShell({
   return (
     <ShellFrame shell="public" eyebrow="VibeDoc front desk" title="One request. One ready visit.">
       <section className="vd-public-panel" aria-labelledby="front-desk-title">
-        <h2 id="front-desk-title">Talk or type with the front desk</h2>
-        <p>
-          This is an automated administrative assistant for scheduling, forms, coverage responses,
-          and approved clinic questions.
-        </p>
+        <div className="vd-agent-intro">
+          <div className="vd-agent-orb" aria-hidden="true"><span /></div>
+          <div>
+            <p className="vd-eyebrow">AI front desk · available now</p>
+            <h2 id="front-desk-title">Talk or type with the front desk</h2>
+            <p>
+              This is an automated administrative assistant for scheduling, forms, coverage responses,
+              and approved clinic questions.
+            </p>
+          </div>
+        </div>
         <p className="vd-source-label">Source: <span>{providerLabels[providerMode]}</span></p>
         {state === 'stopped' ? (
           <section className="vd-safety-stop" role="alert">
@@ -118,12 +134,19 @@ export function PublicAccessShell({
               <button type="submit" className="patient-target">
                 Send request
               </button>
-              <button type="button" className="patient-target" aria-label="Talk to the front desk">
-                Talk to the front desk
-              </button>
+              <span className="vd-voice-unavailable">Voice unavailable — continue by typing</span>
             </div>
           </form>
         )}
+        {bookedVisit ? (
+          <section className="vd-booking-confirmation" aria-labelledby="booking-confirmation-title">
+            <p className="vd-eyebrow">Appointment recorded in {providerLabels[providerMode]}</p>
+            <h3 id="booking-confirmation-title">Your annual-wellness visit is booked</h3>
+            <p>{bookedVisit.physicianDisplay} · {appointmentFormatter.format(new Date(bookedVisit.startsAt))}</p>
+            <p>One required insurance field remains before this visit can become Ready.</p>
+            <button type="button" onClick={onContinueToDemo}>Continue to Synthetic Demo Access</button>
+          </section>
+        ) : null}
         <FunctionTraceGroup contextKey={traceContextKey} traces={traces} />
       </section>
     </ShellFrame>

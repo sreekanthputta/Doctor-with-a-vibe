@@ -36,6 +36,8 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
   const task = visit.resolvedTaskHistory;
   const eligibility = visit.eligibilityLinkage;
   const securityEvent = visit.securityEvent;
+  const hasEvidence = (role: WorkflowEvidenceResourceVM['workflowRole']): boolean =>
+    visit.evidenceResources.some((item) => item.workflowRole === role);
 
   return (
     <>
@@ -55,6 +57,16 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
         ) : <p>{visit.sourceLabel}</p>}
         <p>Updated: <time dateTime={visit.sourceUpdatedAt}>{visit.sourceUpdatedAt}</time></p>
         <p>FHIR Provenance: {visit.provenanceState}</p>
+        <section className="vd-proof-summary" aria-labelledby="admin-proof-title">
+          <h3 id="admin-proof-title">Completed administrative work</h3>
+          <ul>
+            <li>{hasEvidence('patient-reported-intake') ? '✓' : '○'} Patient-reported annual-wellness intake saved</li>
+            <li>{hasEvidence('follow-up-request') && hasEvidence('delivered-follow-up') ? '✓' : '○'} Missing member-ID follow-up requested and delivered</li>
+            <li>{task ? '✓' : '○'} Original required-field Task completed by the owned workflow</li>
+            <li>{eligibility ? '✓' : '○'} Eligibility response received and linked to Coverage</li>
+          </ul>
+          <p>Each item below shows its committed source timestamp and version.</p>
+        </section>
         <ul className="vd-evidence-list vd-list-reset">
           {visit.evidenceResources.map((evidence) => (
             <EvidenceResource key={evidence.reference} evidence={evidence} />
@@ -94,6 +106,7 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
           {' · '}
           {eligibility.providerMode}
         </p>
+        <p>Source transaction: <code>{eligibility.sourceIdentifier}</code></p>
         <time dateTime={eligibility.sourceTimestamp}>{eligibility.sourceTimestamp}</time>
       </section> : (
         <section className="vd-evidence-card" aria-label="Eligibility not run">

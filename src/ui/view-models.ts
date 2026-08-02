@@ -77,7 +77,8 @@ export type EligibilityEvidenceLinkageVM = Readonly<{
   coverageReference: string;
   sourceTimestamp: string;
   transactionState: 'completed';
-  providerMode: 'fixture' | 'live';
+  providerMode: 'fixture' | 'stedi-test';
+  sourceIdentifier: string;
   summary: 'Request → Response → Coverage';
 }>;
 

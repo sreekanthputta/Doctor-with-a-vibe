@@ -25,6 +25,28 @@ describe('PatientWorkspaceShell', () => {
     expect(onSubmitMemberId).toHaveBeenCalledWith('AETNA-DEMO-2048');
   });
 
+  it('locks member-ID submission while the first request is pending', async () => {
+    const user = userEvent.setup();
+    let resolveSubmit: () => void = () => undefined;
+    const pending = new Promise<void>((resolve) => { resolveSubmit = resolve; });
+    const onSubmitMemberId = vi.fn(() => pending);
+    render(
+      <PatientWorkspaceShell
+        state="ready"
+        visit={needsAttentionVisit}
+        onSubmitMemberId={onSubmitMemberId}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Insurance member ID'), 'AETNA-DEMO-2048');
+    await user.click(screen.getByRole('button', { name: 'Submit member ID' }));
+    const pendingButton = screen.getByRole('button', { name: 'Submitting…' });
+    expect(pendingButton).toBeDisabled();
+    await user.click(pendingButton);
+    expect(onSubmitMemberId).toHaveBeenCalledOnce();
+    resolveSubmit();
+  });
+
   it('shows payer language, source time, and confirmed provenance when ready', () => {
     render(
       <PatientWorkspaceShell state="ready" visit={readyVisit} onSubmitMemberId={vi.fn()} />,

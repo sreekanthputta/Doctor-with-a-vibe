@@ -1,4 +1,5 @@
 import type { ReadyVisitVM } from '../../contracts/ready-visit';
+import { isVisitReady } from '../readiness';
 
 type ReadyVisitRailProps = Readonly<{ visit: ReadyVisitVM }>;
 
@@ -12,10 +13,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 });
 
 export function ReadyVisitRail({ visit }: ReadyVisitRailProps): React.JSX.Element {
-  const isReady =
-    visit.status === 'ready' &&
-    visit.openRequiredTaskCount === 0 &&
-    visit.eligibilityTransaction === 'completed';
+  const isReady = isVisitReady(visit);
   const status = isReady ? 'Ready' : 'Needs attention';
 
   return (
@@ -24,7 +22,7 @@ export function ReadyVisitRail({ visit }: ReadyVisitRailProps): React.JSX.Elemen
       aria-label={`${status} visit`}
     >
       <div className="vd-ready-rail__summary">
-        <span aria-hidden="true">{isReady ? '✓' : '!'}</span>
+        <span className="vd-ready-rail__icon" aria-hidden="true">{isReady ? '✓' : '!'}</span>
         <div>
           <p className="vd-eyebrow">Visit readiness</p>
           <strong role="status" aria-live="polite">

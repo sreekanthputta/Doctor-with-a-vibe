@@ -682,6 +682,13 @@ export class MedplumDemoPersistence implements DemoPersistence {
         version: reference.versionId,
         sourceUpdatedAt: reread.meta?.lastUpdated ?? this.#now(),
         workflowRole: WORKFLOW_ROLES[reread.resourceType] ?? 'Workflow evidence',
+        ...(reread.resourceType === 'CoverageEligibilityResponse'
+          ? {
+              sourceIdentifier: reread.identifier?.find(
+                (identifier) => identifier.system === 'urn:vibedoc:eligibility-source',
+              )?.value,
+            }
+          : {}),
       };
     }));
   }

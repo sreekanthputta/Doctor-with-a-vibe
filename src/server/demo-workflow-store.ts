@@ -13,6 +13,7 @@ export type DemoResourceEvidence = {
   version: string;
   sourceUpdatedAt: string;
   workflowRole: string;
+  sourceIdentifier?: string;
 };
 
 export type DemoException = {
@@ -249,8 +250,12 @@ export class DemoWorkflowStore {
       resourceEvidence: persisted?.evidence ?? [
         ...this.#initialEvidence(),
         this.#evidence('CoverageEligibilityRequest', 'eligibility-request', 'Eligibility input'),
-        this.#evidence('CoverageEligibilityResponse', 'eligibility-response', 'Eligibility evidence'),
-        this.#evidence('Communication', 'member-follow-up-completed', 'Follow-up history'),
+        {
+          ...this.#evidence('CoverageEligibilityResponse', 'eligibility-response', 'Eligibility evidence'),
+          sourceIdentifier: 'fixture:demo-v1:eligibility:maria',
+        },
+        this.#evidence('CommunicationRequest', 'member-follow-up-request', 'Follow-up request'),
+        this.#evidence('Communication', 'member-follow-up-completed', 'Delivered follow-up'),
         this.#evidence('Provenance', 'ready-lineage', 'Version lineage'),
       ],
     };

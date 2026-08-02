@@ -23,6 +23,25 @@ describe('PhysicianCockpitShell', () => {
     expect(onOpenVisit).not.toHaveBeenCalled();
     await user.keyboard('{Enter}');
     expect(onOpenVisit).toHaveBeenCalledWith('demo-v1:appointment:maria-wellness');
+    expect(screen.getByText(/visit opened for read-only evidence review/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /visit open · read-only/i })).toBeDisabled();
+  });
+
+  it('never presents an inconsistent visit as Ready', () => {
+    const visit = physicianVisits[0];
+    if (!visit) throw new Error('Physician fixture requires one visit');
+    render(
+      <PhysicianCockpitShell
+        state="ready"
+        visits={[{ ...visit, status: 'ready', openRequiredTaskCount: 1, eligibilityTransaction: 'completed' }]}
+        exceptions={[]}
+        onOpenVisit={vi.fn()}
+        onAcknowledgeException={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('Needs attention').length).toBeGreaterThan(1);
+    expect(screen.queryByText('Ready', { exact: true })).not.toBeInTheDocument();
   });
 
   it('supports J/K navigation and E to open the exception queue', async () => {
@@ -103,6 +122,7 @@ describe('PhysicianCockpitShell', () => {
     expect(within(linkage).getByText('Coverage/coverage-maria')).toBeInTheDocument();
     expect(within(linkage).getByText('Request → Response → Coverage')).toBeInTheDocument();
     expect(within(linkage).getByText('Completed · fixture')).toBeInTheDocument();
+    expect(within(linkage).getByText('fixture:demo-v1:eligibility:maria')).toBeInTheDocument();
   });
 
   it('labels sanitized security evidence separately from FHIR Provenance', () => {

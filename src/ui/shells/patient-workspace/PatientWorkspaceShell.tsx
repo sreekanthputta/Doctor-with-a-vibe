@@ -9,7 +9,7 @@ type PatientWorkspaceShellProps = Readonly<{
   state: SurfaceState;
   visit: ReadyVisitVM;
   sourceLabel?: string;
-  onSubmitMemberId: (memberId: string) => void;
+  onSubmitMemberId: (memberId: string) => Promise<void> | void;
 }>;
 
 const timestampFormatter = new Intl.DateTimeFormat('en-US', {
@@ -25,6 +25,7 @@ export function PatientWorkspaceShell({
   onSubmitMemberId,
 }: PatientWorkspaceShellProps): React.JSX.Element {
   const [memberId, setMemberId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (state !== 'ready') {
     return (
@@ -55,7 +56,9 @@ export function PatientWorkspaceShell({
               onSubmit={(event) => {
                 event.preventDefault();
                 const normalized = memberId.trim();
-                if (normalized.length > 0) onSubmitMemberId(normalized);
+                if (normalized.length === 0 || submitting) return;
+                setSubmitting(true);
+                void Promise.resolve(onSubmitMemberId(normalized)).finally(() => setSubmitting(false));
               }}
             >
               <h3>Insurance member ID required</h3>
@@ -66,8 +69,8 @@ export function PatientWorkspaceShell({
                 value={memberId}
                 onChange={(event) => setMemberId(event.currentTarget.value)}
               />
-              <button type="submit" className="patient-target">
-                Submit member ID
+              <button type="submit" className="patient-target" disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Submit member ID'}
               </button>
             </form>
           ) : (

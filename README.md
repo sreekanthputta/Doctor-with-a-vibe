@@ -6,7 +6,7 @@
 
 VibeDoc is the fictional virtual-first clinic and product brand, operated by one family physician without dedicated administrative staff. It is explicitly not a hospital; physical and specialty services remain with external human-operated partners.
 
-Current status: the local release candidate is frozen for rehearsal. The strict-TypeScript application, four role-separated shells, deterministic typed workflow, restart-safe Medplum persistence graph, durable uncertain-identity exception, exception inbox, session-bound sanitized trace UI, Railway runtime configuration, and automated test harness are implemented. The release gate passes 189 unit/integration tests, 8 Chromium workflows, production build, and 3 live Medplum conformance tests. Optional live voice and Stedi remain feature-gated fallbacks, not demo dependencies. Railway deployment still requires an authenticated Railway account/session.
+Current status: the release candidate is deployed on Railway and frozen for rehearsal. The strict-TypeScript application, four role-separated shells, coordinated patient/physician visual system, deterministic typed workflow, restart-safe Medplum persistence graph, durable uncertain-identity exception, exception inbox, session-bound sanitized trace UI, Railway runtime configuration, and automated test harness are implemented. The release gate passes 196 unit/integration tests, 9 Chromium workflows, production build, and 3 live Medplum conformance tests. Optional live voice and Stedi remain feature-gated fallbacks, not demo dependencies.
 
 ## Hackathon proof
 

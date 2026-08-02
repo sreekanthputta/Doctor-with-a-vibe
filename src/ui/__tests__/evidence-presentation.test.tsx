@@ -76,13 +76,13 @@ describe('persisted evidence presentation', () => {
     });
   });
 
-  it('builds Task and eligibility cards from exact persisted evidence instead of fixture references', () => {
+  it('keeps fixture eligibility labeled as fixture when persistence is live Medplum', () => {
     const projection = projectPersistedWorkflowEvidence({
       evidence: [
         { resourceType: 'Coverage', reference: 'Coverage/live-c', version: '9', sourceUpdatedAt: '2026-08-01T20:20:00.000Z', workflowRole: 'Coverage' },
         { resourceType: 'Task', reference: 'Task/live-t', version: '6', sourceUpdatedAt: '2026-08-01T20:20:03.000Z', workflowRole: 'Owned exception' },
         { resourceType: 'CoverageEligibilityRequest', reference: 'CoverageEligibilityRequest/live-rq', version: '2', sourceUpdatedAt: '2026-08-01T20:20:01.000Z', workflowRole: 'Eligibility input' },
-        { resourceType: 'CoverageEligibilityResponse', reference: 'CoverageEligibilityResponse/live-rs', version: '3', sourceUpdatedAt: '2026-08-01T20:20:02.000Z', workflowRole: 'Eligibility evidence' },
+        { resourceType: 'CoverageEligibilityResponse', reference: 'CoverageEligibilityResponse/live-rs', version: '3', sourceUpdatedAt: '2026-08-01T20:20:02.000Z', workflowRole: 'Eligibility evidence', sourceIdentifier: 'fixture:demo-v1:eligibility:maria' },
       ],
       conversation: 'deterministic-typed',
       persistence: 'medplum-live',
@@ -101,8 +101,15 @@ describe('persisted evidence presentation', () => {
       coverageReference: 'Coverage/live-c',
       sourceTimestamp: '2026-08-01T20:20:02.000Z',
       transactionState: 'completed',
-      providerMode: 'live',
+      providerMode: 'fixture',
+      sourceIdentifier: 'fixture:demo-v1:eligibility:maria',
       summary: 'Request → Response → Coverage',
     });
+
+    const visit = { ...physicianVisits[0], ...projection };
+    render(<EvidenceInspector visit={visit} />);
+    const linkage = screen.getByRole('region', { name: 'Eligibility evidence linkage' });
+    expect(within(linkage).getByText('Completed · fixture')).toBeInTheDocument();
+    expect(within(linkage).getByText('fixture:demo-v1:eligibility:maria')).toBeInTheDocument();
   });
 });
