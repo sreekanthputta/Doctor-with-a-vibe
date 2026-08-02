@@ -139,13 +139,16 @@ function authorizeMutation(request: Request, role: SessionContext['role']): bool
 
 function bootstrapSession(request: Request, response: Response, role: 'public' | 'demo-access'): void {
   const existing = currentSession(request);
-  if (existing && existing.role !== role) {
-    response.status(403).json({ error: 'A separate demo context is required' });
-    return;
-  }
   let session: SessionContext;
   try {
-    session = existing ?? sessions.issue(role, 'anonymous');
+    if (existing && existing.role !== role) {
+      traces.clearSession(existing.sessionId);
+      if (publicWorkflowOwnerSessionId === existing.sessionId) publicWorkflowOwnerSessionId = undefined;
+      if (identityExceptionOwnerSessionId === existing.sessionId) identityExceptionOwnerSessionId = undefined;
+      session = sessions.replace(existing.sessionId, role, 'anonymous');
+    } else {
+      session = existing ?? sessions.issue(role, 'anonymous');
+    }
   } catch (error) {
     if (error instanceof Error && error.message === 'Session capacity reached') {
       response.status(429).json({ error: 'Demo session capacity reached; retry later' });
@@ -153,7 +156,7 @@ function bootstrapSession(request: Request, response: Response, role: 'public' |
     }
     throw error;
   }
-  if (!existing) setSessionCookie(response, session.sessionId);
+  if (!existing || existing.sessionId !== session.sessionId) setSessionCookie(response, session.sessionId);
   response.status(200).json(clientSession(session));
 }
 

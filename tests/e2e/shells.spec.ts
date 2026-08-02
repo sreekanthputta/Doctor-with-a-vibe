@@ -18,6 +18,16 @@ test.describe('VibeDoc four-shell demo', () => {
     await expect(page.getByText(/not authentication/i)).toBeVisible();
   });
 
+  test('opening demo access after the public page rotates to a fresh neutral session', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByLabel(/first name/i)).toBeVisible();
+
+    await page.goto('/demo');
+
+    await expect(page.getByRole('heading', { name: /Choose a fictional workspace/i })).toBeVisible();
+    await expect(page.getByText(/temporarily unavailable/i)).toHaveCount(0);
+  });
+
   test('patient and physician shells expose readiness and source context', async ({ browser }) => {
     const publicContext = await browser.newContext();
     const patientContext = await browser.newContext();
