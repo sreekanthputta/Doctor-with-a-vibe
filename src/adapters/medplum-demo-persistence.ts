@@ -1,5 +1,8 @@
 import type {
   Coverage,
+  CoverageEligibilityRequest,
+  CoverageEligibilityResponse,
+  Patient,
   QuestionnaireResponse,
   Resource,
   Task,
@@ -9,14 +12,14 @@ import { StediEligibilityFixture } from './stedi-eligibility-fixture';
 import { MedplumFhirRepository } from './medplum-fhir-repository';
 import { buildDeliveredInAppCommunication, buildFollowUpRequest } from '../fhir/communication';
 import { buildCoverage, planCoverageMemberIdUpdate } from '../fhir/coverage';
-import { buildEligibilityRequest, buildEligibilityResponse } from '../fhir/eligibility';
+import { buildEligibilityRequest, buildEligibilityResponse, projectEligibility } from '../fhir/eligibility';
 import { requireVersionedReference } from '../fhir/identifiers';
 import { buildDemoPatientCreate } from '../fhir/patient';
 import { buildVersionedProvenance } from '../fhir/provenance';
 import { buildQuestionnaireResponse, planQuestionnaireResponseCompletion } from '../fhir/questionnaire';
 import { buildMutationPlan, type FhirRepository } from '../fhir/repository';
 import { buildAppointmentDraft, captureBookedReferences } from '../fhir/scheduling';
-import { buildMissingMemberTask, buildUncertainIdentityTask } from '../fhir/tasks';
+import { buildMissingMemberTask, buildUncertainIdentityTask, planHumanTaskAcceptance } from '../fhir/tasks';
 import type {
   DemoIdentity,
   DemoPersistence,
@@ -81,6 +84,48 @@ function validateIdentity(identity: DemoIdentity): void {
   }
 }
 
+function dueEndFrom(start: string): string {
+  const parsed = Date.parse(start);
+  if (!Number.isFinite(parsed)) throw new Error('Persistence clock must return a valid ISO datetime');
+  return new Date(parsed + (4 * 60 * 60 * 1000)).toISOString();
+}
+
+function validatePersistedPatient(patient: Patient): void {
+  const matches = patient.birthDate === DEMO_V1.patient.birthDate
+    && patient.name?.some((name) =>
+      name.family === DEMO_V1.patient.familyName
+      && name.given?.includes(DEMO_V1.patient.givenName))
+    && patient.address?.some((address) => address.postalCode === DEMO_V1.patient.postalCode);
+  if (!matches) throw new Error('Conditional identity result did not match the verified synthetic Patient');
+}
+
+function validateLinkedEligibility(
+  request: CoverageEligibilityRequest,
+  response: CoverageEligibilityResponse,
+  coverage: Coverage,
+  memberId: string,
+): void {
+  const requestReference = referenceOf(request);
+  const responseSource = response.identifier?.find((identifier) => identifier.system === 'urn:vibedoc:eligibility-source')?.value;
+  if (
+    coverage.subscriberId !== memberId
+    || request.status !== 'active'
+    || request.purpose?.length !== 1
+    || request.purpose[0] !== 'benefits'
+    || request.insurance?.length !== 1
+    || request.insurance[0]?.coverage.reference !== referenceOf(coverage)
+    || response.status !== 'active'
+    || response.outcome !== 'complete'
+    || response.request?.reference !== requestReference
+    || response.insurance?.length !== 1
+    || response.insurance[0]?.coverage.reference !== referenceOf(coverage)
+    || !responseSource
+    || projectEligibility(response).transaction !== 'completed'
+  ) {
+    throw new Error('Ready requires persisted linked eligibility request/response evidence');
+  }
+}
+
 export class MedplumDemoPersistence implements DemoPersistence {
   readonly #repository: FhirRepository;
   readonly #deleteResource: DeleteResource;
@@ -134,8 +179,17 @@ export class MedplumDemoPersistence implements DemoPersistence {
 
     const patientCreate = buildDemoPatientCreate();
     const patientResult = await this.#repository.conditionalCreate(patientCreate.resource, patientCreate.ifNoneExist);
-    const patient = await this.#reread(patientResult.resource);
-    if (patientResult.created) this.#record(patient);
+    const conditionalPatient = await this.#reread(patientResult.resource);
+    const patientIdentifier = patientCreate.resource.identifier?.[0];
+    if (!patientIdentifier) throw new Error('Synthetic Patient requires a business identifier');
+    if (patientResult.created) this.#record(conditionalPatient);
+    const matchingPatients = await this.#repository.searchByIdentifier<Patient>('Patient', patientIdentifier);
+    if (matchingPatients.length !== 1) throw new Error('Identity binding requires one unique Patient');
+    const patient = await this.#reread(matchingPatients[0]);
+    if (referenceOf(patient) !== referenceOf(conditionalPatient)) {
+      throw new Error('Conditional identity result did not match the unique Patient');
+    }
+    validatePersistedPatient(patient);
     const patientReference = referenceOf(patient);
 
     const appointment = await this.#create({
@@ -172,14 +226,16 @@ export class MedplumDemoPersistence implements DemoPersistence {
     }), 'questionnaire-response');
     const questionnaireResponseReference = referenceOf(questionnaireResponse);
 
+    const taskDueStart = this.#now();
     const task = await this.#create(buildMissingMemberTask({
       taskBusinessId: `${this.#runId}-collect-member-id`,
       patientReference,
       questionnaireResponseReference,
       appointmentReference,
       coverageReference,
-      dueStart: this.#now(),
-      dueEnd: '2026-08-01T19:00:00-05:00',
+      dueStart: taskDueStart,
+      dueEnd: dueEndFrom(taskDueStart),
+      ownerReference: this.#seedReferences.providerReference,
     }), 'missing-member-task');
     const taskReference = referenceOf(task);
 
@@ -207,10 +263,12 @@ export class MedplumDemoPersistence implements DemoPersistence {
   async complete(memberId: string): Promise<DemoPersistenceSnapshot> {
     if (!this.#graph || !this.#snapshot) throw new Error('The persisted workflow has not started');
     if (this.#snapshot.phase === 'ready') return structuredClone(this.#snapshot);
-    const eligibilityResult = await this.#eligibility.check({ memberId });
-
-    const coveragePlan = planCoverageMemberIdUpdate({ coverage: this.#graph.coverage, memberId });
-    const coverage = await this.#update(coveragePlan.resource, coveragePlan.expectedVersion, 'coverage-member-id');
+    let coverage = this.#graph.coverage;
+    if (coverage.subscriberId !== memberId) {
+      const coveragePlan = planCoverageMemberIdUpdate({ coverage, memberId });
+      coverage = await this.#update(coveragePlan.resource, coveragePlan.expectedVersion, 'coverage-member-id');
+      this.#graph = { ...this.#graph, coverage };
+    }
 
     const questionnaireWithMember: QuestionnaireResponse = {
       ...this.#graph.questionnaireResponse,
@@ -219,12 +277,18 @@ export class MedplumDemoPersistence implements DemoPersistence {
         { linkId: 'coverage-member-id', answer: [{ valueString: memberId }] },
       ],
     };
-    const questionnairePlan = planQuestionnaireResponseCompletion(questionnaireWithMember);
-    const questionnaireResponse = await this.#update(
-      questionnairePlan.resource,
-      questionnairePlan.expectedVersion,
-      'complete-intake',
-    );
+    let questionnaireResponse = this.#graph.questionnaireResponse;
+    if (questionnaireResponse.status !== 'completed') {
+      const questionnairePlan = planQuestionnaireResponseCompletion(questionnaireWithMember);
+      questionnaireResponse = await this.#update(
+        questionnairePlan.resource,
+        questionnairePlan.expectedVersion,
+        'complete-intake',
+      );
+      this.#graph = { ...this.#graph, questionnaireResponse };
+    }
+
+    const eligibilityResult = await this.#eligibility.check({ memberId });
 
     const eligibilityRequest = await this.#create(buildEligibilityRequest({
       requestBusinessId: `${this.#runId}-maria-wellness`,
@@ -243,8 +307,17 @@ export class MedplumDemoPersistence implements DemoPersistence {
       result: eligibilityResult,
     }), 'eligibility-response');
 
-    const inProgressTask = await this.#update({ ...this.#graph.task, status: 'in-progress' }, requireVersionedReference(this.#graph.task).versionId, 'task-in-progress');
-    const completedTask = await this.#update({ ...inProgressTask, status: 'completed' }, requireVersionedReference(inProgressTask).versionId, 'task-complete');
+    validateLinkedEligibility(eligibilityRequest, eligibilityResponse, coverage, memberId);
+
+    let task = this.#graph.task;
+    if (task.status === 'requested') {
+      task = await this.#update({ ...task, status: 'in-progress' }, requireVersionedReference(task).versionId, 'task-in-progress');
+      this.#graph = { ...this.#graph, task };
+    }
+    const completedTask = task.status === 'completed'
+      ? task
+      : await this.#update({ ...task, status: 'completed' }, requireVersionedReference(task).versionId, 'task-complete');
+    this.#graph = { ...this.#graph, task: completedTask };
 
     const committed = [coverage, questionnaireResponse, eligibilityRequest, eligibilityResponse, completedTask];
     const provenances: Resource[] = [];
@@ -259,7 +332,16 @@ export class MedplumDemoPersistence implements DemoPersistence {
       }), `provenance-${target.resourceType.toLowerCase()}`));
     }
 
-    this.#graph = { ...this.#graph, coverage, questionnaireResponse, task: completedTask };
+    validateLinkedEligibility(
+      await this.#reread(eligibilityRequest),
+      await this.#reread(eligibilityResponse),
+      await this.#reread(coverage),
+      memberId,
+    );
+    const readyTask = await this.#reread(completedTask);
+    if (readyTask.status !== 'completed') throw new Error('Ready requires the missing-field Task to be completed');
+
+    this.#graph = { ...this.#graph, coverage, questionnaireResponse, task: readyTask };
     this.#snapshot = {
       phase: 'ready',
       evidence: await this.#evidence([
@@ -267,7 +349,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
         this.#graph.appointment,
         coverage,
         questionnaireResponse,
-        completedTask,
+        readyTask,
         this.#graph.communicationRequest,
         this.#graph.communication,
         eligibilityRequest,
@@ -281,13 +363,33 @@ export class MedplumDemoPersistence implements DemoPersistence {
   async recordUncertainIdentity(correlationId: string): Promise<DemoPersistenceSnapshot> {
     if (this.#snapshot) throw new Error('A patient-bound workflow cannot become an uncertain-identity session');
     if (this.#uncertainSnapshot) return structuredClone(this.#uncertainSnapshot);
+    const taskDueStart = this.#now();
     const task = await this.#create(buildUncertainIdentityTask({
       taskBusinessId: `${this.#runId}-uncertain-identity`,
       correlationId,
-      dueStart: this.#now(),
-      dueEnd: '2026-08-01T19:00:00-05:00',
+      dueStart: taskDueStart,
+      dueEnd: dueEndFrom(taskDueStart),
+      ownerReference: this.#seedReferences.providerReference,
     }), 'uncertain-identity');
     this.#uncertainSnapshot = { phase: 'stopped', evidence: await this.#evidence([task]) };
+    return structuredClone(this.#uncertainSnapshot);
+  }
+
+  async acknowledgeException(): Promise<DemoPersistenceSnapshot> {
+    const taskEvidence = this.#uncertainSnapshot?.evidence.find((item) => item.resourceType === 'Task');
+    if (!taskEvidence) throw new Error('No uncertain-identity exception exists');
+    const task = await this.#repository.read<Task>(taskEvidence.reference);
+    if (!task) throw new Error('The uncertain-identity Task no longer exists');
+    if (task.status === 'accepted') {
+      this.#uncertainSnapshot = { phase: 'stopped', evidence: await this.#evidence([task]) };
+      return structuredClone(this.#uncertainSnapshot);
+    }
+    const acceptance = planHumanTaskAcceptance(task, {
+      actorType: 'human',
+      actorReference: task.owner?.reference ?? '',
+    });
+    const accepted = await this.#update(acceptance.resource, acceptance.expectedVersion, 'uncertain-identity-accepted');
+    this.#uncertainSnapshot = { phase: 'stopped', evidence: await this.#evidence([accepted]) };
     return structuredClone(this.#uncertainSnapshot);
   }
 
@@ -309,6 +411,14 @@ export class MedplumDemoPersistence implements DemoPersistence {
   }
 
   async #create<T extends Resource>(resource: T, key: string): Promise<T> {
+    const identifier = 'identifier' in resource && Array.isArray(resource.identifier)
+      ? resource.identifier[0]
+      : undefined;
+    if (identifier?.system && identifier.value) {
+      const existing = await this.#repository.searchByIdentifier<T>(resource.resourceType, identifier);
+      if (existing.length > 1) throw new Error(`${resource.resourceType} idempotency identifier is ambiguous`);
+      if (existing[0]) return this.#reread(existing[0]);
+    }
     const created = await this.#repository.create(buildMutationPlan({
       workflow: 'ready-visit',
       operation: 'create',

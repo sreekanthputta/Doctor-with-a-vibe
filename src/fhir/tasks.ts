@@ -8,6 +8,7 @@ interface OwnedDueTaskInput {
   taskBusinessId: string;
   dueStart: string;
   dueEnd: string;
+  ownerReference?: string;
 }
 
 function requireIsoInstant(value: string): number {
@@ -31,7 +32,7 @@ function taskBase(input: OwnedDueTaskInput, code: string): Task {
     status: 'requested',
     intent: 'order',
     code: { coding: [{ system: TASK_CODE_SYSTEM, code }] },
-    owner: { reference: DEMO_V1.practitionerRoleReference },
+    owner: { reference: input.ownerReference ?? DEMO_V1.practitionerRoleReference },
     restriction: { period: { start: input.dueStart, end: input.dueEnd } },
   };
 }

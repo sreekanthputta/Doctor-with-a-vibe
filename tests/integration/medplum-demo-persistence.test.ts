@@ -1,6 +1,7 @@
 import type { Identifier, Resource } from '@medplum/fhirtypes';
 import { describe, expect, it } from 'vitest';
 import { MedplumDemoPersistence } from '../../src/adapters/medplum-demo-persistence';
+import { StediEligibilityFixture } from '../../src/adapters/stedi-eligibility-fixture';
 import type { FhirRepository, MutationPlan } from '../../src/fhir/repository';
 import { DEMO_V1 } from '../../src/test/fixtures/demo-v1';
 
@@ -8,6 +9,8 @@ class MemoryRepository implements FhirRepository {
   readonly events: string[] = [];
   readonly resources = new Map<string, Resource>();
   readonly failOn = new Set<string>();
+  duplicatePatientOnSearch = false;
+  corruptEligibilityResponseOnRead = false;
   #nextId = 1;
 
   async conditionalCreate<T extends Resource>(resource: T): Promise<{ created: boolean; resource: T }> {
@@ -39,13 +42,21 @@ class MemoryRepository implements FhirRepository {
 
   read<T extends Resource>(reference: string): Promise<T | undefined> {
     this.events.push(`read:${reference.split('/')[0]}`);
-    return Promise.resolve(structuredClone(this.resources.get(reference)) as T | undefined);
+    const resource = structuredClone(this.resources.get(reference));
+    if (this.corruptEligibilityResponseOnRead && resource?.resourceType === 'CoverageEligibilityResponse') {
+      resource.request = { reference: 'CoverageEligibilityRequest/wrong-request' };
+    }
+    return Promise.resolve(resource as T | undefined);
   }
 
   searchByIdentifier<T extends Resource>(resourceType: T['resourceType'], identifier: Identifier): Promise<T[]> {
-    return Promise.resolve([...this.resources.values()].filter((resource) =>
+    const found = [...this.resources.values()].filter((resource) =>
       resource.resourceType === resourceType
-      && identifiersOf(resource).some((value) => value.system === identifier.system && value.value === identifier.value)) as T[]);
+      && identifiersOf(resource).some((value) => value.system === identifier.system && value.value === identifier.value)) as T[];
+    if (this.duplicatePatientOnSearch && resourceType === 'Patient' && found[0]) {
+      found.push({ ...structuredClone(found[0]), id: 'forged-duplicate' });
+    }
+    return Promise.resolve(found);
   }
 
   delete = (reference: string): Promise<void> => {
@@ -92,6 +103,25 @@ function createHarness(repository = new MemoryRepository()) {
 }
 
 describe('MedplumDemoPersistence', () => {
+  it('derives each exception deadline from the current clock and the four-hour policy', async () => {
+    const { persistence, repository } = createHarness();
+    await persistence.start(exactIdentity);
+    const task = [...repository.resources.values()].find((item) => item.resourceType === 'Task');
+
+    expect(task?.resourceType === 'Task' && task.restriction?.period).toEqual({
+      start: DEMO_V1.clock,
+      end: '2026-08-02T00:00:00.000Z',
+    });
+  });
+
+  it('fails closed when the post-conditional-create identity search is not unique', async () => {
+    const { persistence, repository } = createHarness();
+    repository.duplicatePatientOnSearch = true;
+
+    await expect(persistence.start(exactIdentity)).rejects.toThrow('unique Patient');
+    expect([...repository.resources.values()].some((item) => item.resourceType === 'Appointment')).toBe(false);
+  });
+
   it('persists and rereads the minimal needs-attention graph in dependency order', async () => {
     const { persistence, repository } = createHarness();
     const result = await persistence.start(exactIdentity);
@@ -129,6 +159,48 @@ describe('MedplumDemoPersistence', () => {
     expect(taskComplete).toBeGreaterThan(responseCreate);
   });
 
+  it('commits and rereads Coverage before invoking eligibility', async () => {
+    const repository = new MemoryRepository();
+    const eligibility = {
+      check: async ({ memberId }: { memberId: string }) => {
+        const coverage = [...repository.resources.values()].find((item) => item.resourceType === 'Coverage');
+        expect(coverage?.resourceType === 'Coverage' && coverage.subscriberId).toBe(memberId);
+        return new StediEligibilityFixture().check({ memberId });
+      },
+    };
+    const persistence = new MedplumDemoPersistence({
+      repository,
+      deleteResource: repository.delete,
+      runId: 'coverage-first-run',
+      eligibility,
+      now: () => DEMO_V1.clock,
+    });
+    await persistence.start(exactIdentity);
+
+    await expect(persistence.complete(DEMO_V1.memberId)).resolves.toMatchObject({ phase: 'ready' });
+  });
+
+  it('resumes after partial eligibility persistence without repeating committed updates', async () => {
+    const { persistence, repository } = createHarness();
+    await persistence.start(exactIdentity);
+    repository.failOn.add('create:CoverageEligibilityResponse');
+    await expect(persistence.complete(DEMO_V1.memberId)).rejects.toThrow('CoverageEligibilityResponse');
+    repository.failOn.delete('create:CoverageEligibilityResponse');
+
+    await expect(persistence.complete(DEMO_V1.memberId)).resolves.toMatchObject({ phase: 'ready' });
+    expect([...repository.resources.values()].filter((item) => item.resourceType === 'CoverageEligibilityRequest')).toHaveLength(1);
+  });
+
+  it('does not project Ready from malformed reread eligibility evidence', async () => {
+    const { persistence, repository } = createHarness();
+    await persistence.start(exactIdentity);
+    repository.corruptEligibilityResponseOnRead = true;
+
+    await expect(persistence.complete(DEMO_V1.memberId)).rejects.toThrow('linked eligibility');
+    const task = [...repository.resources.values()].find((item) => item.resourceType === 'Task');
+    expect(task?.resourceType === 'Task' && task.status).toBe('requested');
+  });
+
   it('does not complete the Task when eligibility persistence fails', async () => {
     const { persistence, repository } = createHarness();
     await persistence.start(exactIdentity);
@@ -153,6 +225,21 @@ describe('MedplumDemoPersistence', () => {
     expect(task?.resourceType === 'Task' && task.owner?.reference).toBe(DEMO_V1.practitionerRoleReference);
     expect(task?.resourceType === 'Task' && task.for).toBeUndefined();
     expect(task?.resourceType === 'Task' && task.focus).toBeUndefined();
+  });
+
+  it('accepts the uncertain identity Task once using a version-aware human transition', async () => {
+    const { persistence, repository } = createHarness();
+    const stopped = await persistence.recordUncertainIdentity('uncertain-1');
+    const taskEvidence = stopped.evidence.find((item) => item.resourceType === 'Task');
+
+    const first = await persistence.acknowledgeException();
+    const second = await persistence.acknowledgeException();
+    const task = taskEvidence ? repository.resources.get(taskEvidence.reference) : undefined;
+
+    expect(first).toEqual(second);
+    expect(first.phase).toBe('stopped');
+    expect(task?.resourceType === 'Task' && task.status).toBe('accepted');
+    expect(task?.meta?.versionId).toBe('2');
   });
 
   it('resets only instance-recorded resources in reverse order and verifies deletion', async () => {
