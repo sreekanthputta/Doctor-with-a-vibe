@@ -5,6 +5,7 @@ import type {
   Patient,
   QuestionnaireResponse,
   Resource,
+  Slot,
   Task,
 } from '@medplum/fhirtypes';
 import type { MedplumClient } from '@medplum/core';
@@ -18,7 +19,12 @@ import { buildDemoPatientCreate } from '../fhir/patient';
 import { buildVersionedProvenance } from '../fhir/provenance';
 import { buildQuestionnaireResponse, planQuestionnaireResponseCompletion } from '../fhir/questionnaire';
 import { buildMutationPlan, type FhirRepository } from '../fhir/repository';
-import { buildAppointmentDraft, captureBookedReferences } from '../fhir/scheduling';
+import {
+  buildAppointmentDraft,
+  captureBookedReferences,
+  MedplumAtomicSchedulingRepository,
+  type AtomicBookingEvidence,
+} from '../fhir/scheduling';
 import { buildExceptionTask, buildMissingMemberTask, planHumanTaskAcceptance } from '../fhir/tasks';
 import type {
   DemoIdentity,
@@ -29,6 +35,7 @@ import type {
 import { DEMO_V1 } from '../test/fixtures/demo-v1';
 
 type EligibilityPort = Pick<StediEligibilityFixture, 'check'>;
+type AtomicSchedulingPort = { book(appointment: import('@medplum/fhirtypes').Appointment): Promise<AtomicBookingEvidence> };
 type DeleteResource = (reference: string) => Promise<void>;
 
 type DemoSeedReferences = {
@@ -133,6 +140,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
   readonly #runId: string;
   readonly #now: () => string;
   readonly #seedReferences: DemoSeedReferences;
+  readonly #atomicScheduling?: AtomicSchedulingPort;
   readonly #createdReferences: string[] = [];
   #graph?: PersistedGraph;
   #snapshot?: DemoPersistenceSnapshot;
@@ -145,6 +153,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
     eligibility?: EligibilityPort;
     now?: () => string;
     seedReferences?: DemoSeedReferences;
+    atomicScheduling?: AtomicSchedulingPort;
   }) {
     if (!/^[A-Za-z0-9.-]+$/.test(input.runId)) throw new Error('Persistence requires a safe run ID');
     this.#repository = input.repository;
@@ -153,6 +162,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
     this.#eligibility = input.eligibility ?? new StediEligibilityFixture();
     this.#now = input.now ?? (() => new Date().toISOString());
     this.#seedReferences = input.seedReferences ?? DEFAULT_SEED_REFERENCES;
+    this.#atomicScheduling = input.atomicScheduling;
   }
 
   static fromClient(client: MedplumClient, input: {
@@ -163,6 +173,7 @@ export class MedplumDemoPersistence implements DemoPersistence {
   }): MedplumDemoPersistence {
     return new MedplumDemoPersistence({
       repository: new MedplumFhirRepository(client),
+      atomicScheduling: new MedplumAtomicSchedulingRepository(client),
       deleteResource: async (reference) => {
         const [resourceType, id, extra] = reference.split('/');
         if (!resourceType || !id || extra) throw new Error('Reset requires an exact ResourceType/id reference');
@@ -192,18 +203,29 @@ export class MedplumDemoPersistence implements DemoPersistence {
     validatePersistedPatient(patient);
     const patientReference = referenceOf(patient);
 
-    const appointment = await this.#create({
-      ...buildAppointmentDraft({
+    const appointmentDraft = buildAppointmentDraft({
         appointmentBusinessId: `${this.#runId}-maria-wellness`,
         patientReference,
         healthcareServiceReference: this.#seedReferences.healthcareServiceReference,
         slotReference: this.#seedReferences.slotReference,
         startsAt: DEMO_V1.selectedSlot,
         endsAt: '2026-08-04T16:00:00.000Z',
-      }),
-      status: 'booked',
-    }, 'appointment');
-    captureBookedReferences(appointment, this.#seedReferences.slotReference);
+        providerReference: this.#seedReferences.providerReference,
+      });
+    let appointment: import('@medplum/fhirtypes').Appointment;
+    if (this.#atomicScheduling) {
+      const booking = await this.#atomicScheduling.book(appointmentDraft);
+      appointment = await this.#reread(booking.appointment);
+      this.#record(appointment);
+      for (const slot of booking.slots) {
+        const rereadSlot = await this.#reread<Slot>(slot);
+        this.#record(rereadSlot);
+      }
+      captureBookedReferences(appointment);
+    } else {
+      appointment = await this.#create({ ...appointmentDraft, status: 'booked' }, 'appointment');
+      captureBookedReferences(appointment, this.#seedReferences.slotReference);
+    }
     const appointmentReference = referenceOf(appointment);
 
     const coverage = await this.#create(buildCoverage({

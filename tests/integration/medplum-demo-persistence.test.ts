@@ -138,6 +138,34 @@ describe('MedplumDemoPersistence', () => {
     for (const evidence of result.evidence) expect(repository.events).toContain(`read:${evidence.resourceType}`);
   });
 
+  it('uses atomic scheduling evidence instead of directly creating a booked Appointment when configured', async () => {
+    const repository = new MemoryRepository();
+    const atomicScheduling = {
+      book: (draft: import('@medplum/fhirtypes').Appointment) => {
+        expect(draft.status).toBe('proposed');
+        const appointment = {
+          ...structuredClone(draft), id: 'atomic-appointment', meta: { versionId: '1', lastUpdated: DEMO_V1.clock },
+          status: 'booked' as const, slot: [{ reference: 'Slot/atomic-busy' }],
+        };
+        const slot = {
+          resourceType: 'Slot' as const, id: 'atomic-busy', meta: { versionId: '1', lastUpdated: DEMO_V1.clock },
+          status: 'busy' as const, schedule: { reference: 'Schedule/live' }, start: draft.start!, end: draft.end!,
+        };
+        repository.resources.set('Appointment/atomic-appointment', appointment);
+        repository.resources.set('Slot/atomic-busy', slot);
+        return Promise.resolve({ appointment, slots: [slot] });
+      },
+    };
+    const persistence = new MedplumDemoPersistence({
+      repository, deleteResource: repository.delete, runId: 'atomic-run', atomicScheduling, now: () => DEMO_V1.clock,
+    });
+
+    await persistence.start(exactIdentity);
+
+    expect(repository.events).not.toContain('create:Appointment');
+    expect(repository.resources.get('Slot/atomic-busy')?.resourceType).toBe('Slot');
+  });
+
   it('updates versioned intake and coverage, persists linked eligibility, then completes the same Task', async () => {
     const { persistence, repository } = createHarness();
     const started = await persistence.start(exactIdentity);
