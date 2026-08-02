@@ -12,7 +12,20 @@ export type SurfaceState =
 
 export type PublicSurfaceState = SurfaceState | 'stopped';
 export type ProviderMode = 'live' | 'fixture' | 'prerecorded';
+export type ConversationExecutionMode = 'deterministic-typed' | 'deepgram-live' | 'prerecorded';
+export type MedplumPersistenceMode = 'medplum-live' | 'medplum-fixture';
 export type DemoPersona = 'maria-demo' | 'maya-demo';
+
+export type EvidenceSourceModesVM = Readonly<{
+  conversation: Readonly<{
+    mode: ConversationExecutionMode;
+    label: string;
+  }>;
+  persistence: Readonly<{
+    mode: MedplumPersistenceMode;
+    label: string;
+  }>;
+}>;
 
 export type ExceptionVM = Readonly<{
   id: string;
@@ -26,6 +39,7 @@ export type ExceptionVM = Readonly<{
 }>;
 
 export type WorkflowEvidenceRole =
+  | 'identity-record'
   | 'booking-record'
   | 'patient-reported-intake'
   | 'coverage-record'
@@ -38,7 +52,7 @@ export type WorkflowEvidenceRole =
 
 export type WorkflowEvidenceResourceVM = Readonly<{
   reference: string;
-  businessIdentifier: string;
+  businessIdentifier?: string;
   versionId: string;
   sourceTimestamp: string;
   workflowRole: WorkflowEvidenceRole;
@@ -48,7 +62,7 @@ export type WorkflowEvidenceResourceVM = Readonly<{
 
 export type ResolvedTaskHistoryVM = Readonly<{
   reference: string;
-  businessIdentifier: string;
+  businessIdentifier?: string;
   versionId: string;
   sourceTimestamp: string;
   status: 'completed';
@@ -80,6 +94,7 @@ export type SanitizedSecurityEventVM = Readonly<{
 export type PhysicianVisitVM = ReadyVisitVM &
   Readonly<{
     sourceLabel: string;
+    sourceModes?: EvidenceSourceModesVM;
     evidenceResources: readonly WorkflowEvidenceResourceVM[];
     resolvedTaskHistory?: ResolvedTaskHistoryVM;
     eligibilityLinkage?: EligibilityEvidenceLinkageVM;

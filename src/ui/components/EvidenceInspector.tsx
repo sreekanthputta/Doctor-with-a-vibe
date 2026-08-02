@@ -13,10 +13,12 @@ function EvidenceResource({ evidence }: Readonly<{ evidence: WorkflowEvidenceRes
       </div>
       <p><strong>{evidence.workflowRoleLabel}</strong></p>
       <dl>
-        <div>
-          <dt>Business identifier</dt>
-          <dd><code>{evidence.businessIdentifier}</code></dd>
-        </div>
+        {evidence.businessIdentifier === undefined ? null : (
+          <div>
+            <dt>Business identifier</dt>
+            <dd><code>{evidence.businessIdentifier}</code></dd>
+          </div>
+        )}
         <div>
           <dt>Source timestamp</dt>
           <dd><time dateTime={evidence.sourceTimestamp}>{evidence.sourceTimestamp}</time></dd>
@@ -39,7 +41,19 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
     <>
       <section aria-labelledby="workflow-evidence-title">
         <h2 id="workflow-evidence-title">Medplum workflow evidence</h2>
-        <p>{visit.sourceLabel} · Updated: <time dateTime={visit.sourceUpdatedAt}>{visit.sourceUpdatedAt}</time></p>
+        {visit.sourceModes ? (
+          <dl role="group" aria-label="Workflow source modes">
+            <div>
+              <dt>Conversation</dt>
+              <dd>{visit.sourceModes.conversation.label}</dd>
+            </div>
+            <div>
+              <dt>Persistence</dt>
+              <dd>{visit.sourceModes.persistence.label}</dd>
+            </div>
+          </dl>
+        ) : <p>{visit.sourceLabel}</p>}
+        <p>Updated: <time dateTime={visit.sourceUpdatedAt}>{visit.sourceUpdatedAt}</time></p>
         <p>FHIR Provenance: {visit.provenanceState}</p>
         <ul className="vd-evidence-list vd-list-reset">
           {visit.evidenceResources.map((evidence) => (
@@ -52,7 +66,9 @@ export function EvidenceInspector({ visit }: EvidenceInspectorProps): React.JSX.
         <h3 id="resolved-task-title">Resolved Task history</h3>
         <p><strong>Completed</strong> · <code>{task.reference}</code> · Version {task.versionId}</p>
         <dl>
-          <div><dt>Business identifier</dt><dd><code>{task.businessIdentifier}</code></dd></div>
+          {task.businessIdentifier === undefined ? null : (
+            <div><dt>Business identifier</dt><dd><code>{task.businessIdentifier}</code></dd></div>
+          )}
           <div><dt>Owner</dt><dd>{task.ownerDisplay}</dd></div>
           <div><dt>Source timestamp</dt><dd><time dateTime={task.sourceTimestamp}>{task.sourceTimestamp}</time></dd></div>
           <div><dt>Resolution</dt><dd>{task.resolutionSummary}</dd></div>
